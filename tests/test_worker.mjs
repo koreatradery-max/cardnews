@@ -58,6 +58,12 @@ await fresh(); await cardnewsCallback(env, cq('cn:nx:' + ID));
 const em = tgCalls.find(c => c[0] === 'editMessageMedia')[1];
 assert.equal(em.media.media, 'https://raw.example/media/' + ID + '_1.jpg'); assert.ok(em.media.caption.includes('📸 B뉴스'));
 assert.equal(db['cardnews/' + ID].v, 1);
+// 이전 사진 → 1번째로 되돌아가고, 다시 다음 사진 → 2번째
+reset(); await cardnewsCallback(env, cq('cn:pv:' + ID));
+assert.equal(tgCalls.find(c => c[0] === 'editMessageMedia')[1].media.media, 'https://raw.example/media/' + ID + '_0.jpg'); assert.equal(db['cardnews/' + ID].v, 0);
+reset(); await cardnewsCallback(env, cq('cn:pv:' + ID)); assert.equal(db['cardnews/' + ID].v, 1);   // 첫 장에서 이전 → 마지막 장
+const kb = tgCalls.find(c => c[0] === 'editMessageMedia')[1].reply_markup.inline_keyboard[1];
+assert.equal(kb[0].callback_data, 'cn:pv:' + ID); assert.ok(kb[1].text.includes('(2/2)'));
 reset(); r = await api('/cardnews/auto', { id: ID });
 assert.equal(r.result, 'posted');
 assert.equal(igCalls[0][0], 'https://graph.instagram.com/999/media');

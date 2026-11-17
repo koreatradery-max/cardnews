@@ -23,7 +23,7 @@ jobs:
       CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
       CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
       CARDNEWS_MODEL: ${{ vars.CARDNEWS_MODEL }}
-      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '10' }}
+      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '0' }}
       TZ: Asia/Seoul
     steps:
       - name: 키 확인 (아직 등록 전이면 조용히 종료)
@@ -75,6 +75,6 @@ jobs:
           git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" media
           sleep 10
 
-      - name: 텔레그램 승인 요청 → 10분 무응답 시 자동 승인
+      - name: 텔레그램 승인 요청 (승인한 것만 업로드)
         if: steps.keys.outputs.ready == '1'
         run: python run.py notify

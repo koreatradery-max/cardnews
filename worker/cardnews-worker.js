@@ -21,7 +21,7 @@
  */
 function cnKeyboard(id, v, n) {
   const rows = [[{ text: '✅ 승인', callback_data: `cn:ok:${id}` }, { text: '❌ 반려', callback_data: `cn:no:${id}` }]];
-  if (n > 1) rows.push([{ text: `🔄 다른 사진 (${v + 1}/${n})`, callback_data: `cn:nx:${id}` }]);
+  if (n > 1) rows.push([{ text: '◀ 이전 사진', callback_data: `cn:pv:${id}` }, { text: `다음 사진 ▶ (${v + 1}/${n})`, callback_data: `cn:nx:${id}` }]);
   return { inline_keyboard: rows };
 }
 function cnBase(env) { return String(env.CARDNEWS_BASE || '').replace(/\/?$/, '/'); }
@@ -127,8 +127,8 @@ async function cardnewsCallback(env, cq) {
   const n = item.variants.length, v = Math.min(Number(st.v || 0), n - 1);
   const where = { chat: cq.message.chat.id, mid: cq.message.message_id, v };
 
-  if (act === 'nx') {
-    const nv = (v + 1) % n;
+  if (act === 'nx' || act === 'pv') {
+    const nv = (v + (act === 'pv' ? n - 1 : 1)) % n;
     const r = await tg(env, 'editMessageMedia', { chat_id: where.chat, message_id: where.mid,
       media: { type: 'photo', media: cnBase(env) + item.variants[nv].file, caption: cnText(item, nv) }, reply_markup: cnKeyboard(id, nv, n) });
     if (r.ok) await fsWrite(env, [{ path: `cardnews/${id}`, data: { v: nv }, mask: true }]);

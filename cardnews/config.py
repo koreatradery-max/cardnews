@@ -22,7 +22,7 @@ NAVER_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 LLM_MODEL = os.environ.get("CARDNEWS_MODEL", "")               # 비우면 무료로 쓸 수 있는 Flash-Lite 계열을 자동 선택
 WORKER_URL = os.environ.get("CARDNEWS_WORKER_URL", "").rstrip("/")   # 기존 텔레그램 Worker 주소
 WORKER_KEY = os.environ.get("CARDNEWS_KEY", "")                # Worker 와 공유하는 비밀값
-AUTO_APPROVE_MIN = float(os.environ.get("CARDNEWS_AUTO_MIN", "10"))  # 이 시간(분) 동안 응답이 없으면 자동 승인
+AUTO_APPROVE_MIN = float(os.environ.get("CARDNEWS_AUTO_MIN", "0"))   # 0: 자동 승인 끔(승인한 것만 업로드). 숫자를 넣으면 그 시간(분) 무응답 시 자동 승인
 
 # 기사 수집용 RSS (모두 무료·키 불필요, 기사 원문 주소를 직접 주는 피드). 실패한 피드는 건너뛴다.
 RSS_FEEDS = [
