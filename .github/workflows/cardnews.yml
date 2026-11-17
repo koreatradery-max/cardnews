@@ -17,8 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
-      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}
-      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
       CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
       CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
@@ -29,7 +27,7 @@ jobs:
       - name: 키 확인 (아직 등록 전이면 조용히 종료)
         id: keys
         run: |
-          if [ -n "$NAVER_CLIENT_ID" ] && [ -n "$NAVER_CLIENT_SECRET" ] && [ -n "$GEMINI_API_KEY" ] && [ -n "$CARDNEWS_KEY" ]; then
+          if [ -n "$GEMINI_API_KEY" ] && [ -n "$CARDNEWS_KEY" ]; then
             echo "ready=1" >> "$GITHUB_OUTPUT"
           else
             echo "::notice::키가 아직 등록되지 않아 실행하지 않았습니다."

@@ -1,5 +1,5 @@
 """사진 후보 수집·검증, 강조색 추출."""
-import colorsys, io, urllib.parse
+import colorsys, io, re
 from PIL import Image
 from . import collect
 
@@ -20,28 +20,21 @@ def load_image(url):
     return img
 
 
-def candidates(articles_meta, queries, want=3, log=print):
-    """[(PIL 이미지, 출처명)] 최대 want 개. 1순위: 기사 대표 이미지, 2순위: 네이버 이미지 검색."""
-    urls, seen = [], set()
+BAD_IMAGE = re.compile(r"logo|default|noimage|no_image|noimg|placeholder|blank|sns_share|ogimage|og_image", re.I)
+
+
+def candidates(articles_meta, want=3, log=print):
+    """[(PIL 이미지, 출처명)] 최대 want 개. 같은 이슈를 다룬 기사들의 대표 이미지를 언론사별로 하나씩."""
+    out, seen = [], set()
     for a in articles_meta:
-        if a.get("image"):
-            urls.append((a["image"], a.get("site") or a.get("source") or ""))
-    for q in queries:
-        try:
-            for it in collect.naver("image", q, 8, "sim"):
-                host = urllib.parse.urlparse(it.get("link", "")).netloc.replace("www.", "")
-                urls.append((it.get("link", ""), host))
-        except Exception as e:
-            log(f"    이미지 검색 실패 '{q}' ({e})")
-    out = []
-    for url, credit in urls:
+        url = a.get("image") or ""
         key = url.split("?")[0]
-        if not url.startswith("http") or key in seen:
+        if not url.startswith("http") or key in seen or BAD_IMAGE.search(key.rsplit("/", 1)[-1]):
             continue
         seen.add(key)
         img = load_image(url)
         if img is not None:
-            out.append((img, credit or "온라인 커뮤니티"))
+            out.append((img, a.get("site") or a.get("source") or "언론 보도"))
             if len(out) >= want:
                 break
     return out

@@ -13,14 +13,13 @@
    - 다른 사진 → 같은 문구로 다음 사진 후보로 교체 (출처 표기도 함께 바뀜)
    - **10분 동안 응답이 없으면 자동 승인** (그때 보이는 사진으로 업로드)
 
-모두 무료 등급으로 동작합니다: GitHub Actions(공개 저장소), Gemini API 무료 등급, 네이버 검색 API, Cloudflare Workers, 텔레그램, 인스타그램 API.
+모두 무료 등급으로 동작합니다: GitHub Actions(공개 저장소), Gemini API 무료 등급, 언론사 RSS, Cloudflare Workers, 텔레그램, 인스타그램 API.
 
 ## 설정 (한 번만)
 
 ### 1. GitHub Secrets (Settings → Secrets and variables → Actions)
 | 이름 | 값 |
 |---|---|
-| `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | developers.naver.com 에서 애플리케이션 등록 → 사용 API "검색" |
 | `GEMINI_API_KEY` | aistudio.google.com 에서 발급 (결제 수단 등록 없이 무료 등급 사용) |
 | `CARDNEWS_KEY` | 직접 정한 긴 임의 문자열 (Worker 에도 같은 값) |
 
@@ -48,11 +47,11 @@
 ## 바꿀 수 있는 값 (`cardnews/config.py`)
 - `AUTO_APPROVE_MIN` 자동 승인까지 기다리는 시간(분, 0이면 자동 승인 끔). 저장소 변수 `CARDNEWS_AUTO_MIN` 으로도 바꿀 수 있습니다.
 - `SETS_PER_RUN` 회차당 세트 수, `VARIANTS` 사진 후보 수, `HISTORY_DAYS` 중복 제외 기간
-- `RSS_FEEDS`, `NAVER_SEED_QUERIES` 수집 채널
+- `RSS_FEEDS` 기사 수집 피드, `TREND_FEEDS` 화제성 참고 피드
 - `BRAND`, `CTA` 라벨과 마지막 줄 문구
 - 문구 규칙은 `cardnews/write.py` 의 `SELECT_SYS`, `WRITE_SYS`
 
 ## 알아둘 점
-- 사진은 기사 대표 이미지와 네이버 이미지 검색에서 가져오며, 본문 끝에 `📸 출처` 를 붙입니다. 출처를 적어도 저작권·초상권 문제가 될 수 있으니 승인 전에 사진을 확인하세요. 10분이 지나면 확인 없이 올라갑니다.
+- 사진은 같은 이슈를 다룬 기사들의 대표 이미지에서 가져오며, 본문 끝에 `📸 출처` 를 붙입니다. 출처를 적어도 저작권·초상권 문제가 될 수 있으니 승인 전에 사진을 확인하세요. 10분이 지나면 확인 없이 올라갑니다.
 - 쓸 수 있는 사진이 없으면 글자만 있는 기본 배경으로 만듭니다.
 - 글꼴은 Pretendard (SIL Open Font License) 입니다.

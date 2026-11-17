@@ -47,12 +47,12 @@ def generate():
     os.makedirs(config.OUT_DIR, exist_ok=True)
     history = load_history()
     log("1) 이슈 후보 수집")
-    cands = collect.collect_candidates(log)
+    cands, trends = collect.collect_candidates(log)
     if len(cands) < 10:
         raise RuntimeError(f"뉴스 후보가 너무 적습니다 ({len(cands)}건). 수집 채널을 확인하세요.")
     log(f"   후보 {len(cands)}건")
     log("2) 이슈 선별")
-    picks = write.select_issues(cands, [h["topic"] for h in history], config.SETS_PER_RUN + 3)
+    picks = write.select_issues(cands, trends, [h["topic"] for h in history], config.SETS_PER_RUN + 3)
     made = []
     for issue in picks:
         if len(made) >= config.SETS_PER_RUN:
@@ -61,7 +61,7 @@ def generate():
             log(f"   건너뜀(중복): {issue['topic']}")
             continue
         try:
-            item = build_set(issue, f"{now:%y%m%dT%H%M}-{len(made) + 1}")
+            item = build_set(issue, f"{now:%y%m%dT%H%M}-{len(made) + 1}", cands)
         except Exception as e:
             log(f"   실패: {issue['topic']} ({e})")
             continue
@@ -79,21 +79,20 @@ def generate():
     return made
 
 
-def build_set(issue, set_id):
+def build_set(issue, set_id, pool=()):
     log(f"3) 작성: {issue['topic']}")
-    arts = collect.naver_news(issue["query"], 10, "sim")
-    if not arts:
-        log("   관련 기사를 찾지 못해 건너뜀")
-        return None
+    arts = collect.related(issue["query"].split(), issue["articles"], pool)
     metas = []
-    for a in arts[:3]:
-        m = collect.fetch_article(a["link"])
-        metas.append({**a, **m})
-    text = write.write_set(issue, arts, [m["text"] for m in metas])
+    for a in arts[:5]:
+        metas.append({**a, **collect.fetch_article(a["link"])})
+    if not any(len(m["text"]) > 150 for m in metas):
+        log("   기사 본문을 읽지 못해 건너뜀")
+        return None
+    text = write.write_set(issue, arts, [m["text"] for m in metas[:3]])
     if not text:
         log("   자료 부족으로 건너뜀")
         return None
-    imgs = images.candidates(metas, text["image_queries"], config.VARIANTS, log)
+    imgs = images.candidates(metas, config.VARIANTS, log)
     variants = []
     if not imgs:
         log("   쓸 수 있는 사진이 없어 기본 배경 사용")

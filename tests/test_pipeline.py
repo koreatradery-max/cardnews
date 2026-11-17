@@ -8,7 +8,7 @@ import run
 tmp = tempfile.mkdtemp()
 config.OUT_DIR = os.path.join(tmp, "out")
 config.HISTORY = os.path.join(tmp, "history.json")
-config.NAVER_ID = config.NAVER_SECRET = config.GEMINI_KEY = config.WORKER_KEY = "x"
+config.GEMINI_KEY = config.WORKER_KEY = "x"
 config.WORKER_URL = "https://w.example"
 config.AUTO_APPROVE_MIN = 0.001
 
@@ -28,19 +28,15 @@ def fake_img(seed, size=(1200, 800)):
 
 
 def fake_get(url, headers=None, timeout=15, limit=0):
-    if "rss" in url:
-        items = "".join(f"<item><title>{t} - 가짜일보</title><link>https://ex.com/{i}</link><source>가짜일보</source></item>"
-                        for i, t in enumerate([x[0] for x in TOPICS] + [f"채우기용 기사 제목 {k}번 소식" for k in "가나다라마바사아자차카타파하"]))
+    if "rss" in url.lower() or "google" in url:
+        press = url.split("/")[2]
+        titles = [x[0] for x in TOPICS] + [f"채우기용 기사 제목 {k}번 소식" for k in "가나다라마바사아자차카타파하"] + ["[부고] 아무개씨 별세"]
+        items = "".join(f"<item><title>{t} {press[:3]}</title><link>https://press.example/{press}/{i}</link><description>설명 &quot;인용&quot;</description></item>"
+                        for i, t in enumerate(titles))
         return f"<rss><channel>{items}</channel></rss>".encode(), {}
-    if "search/news" in url:
-        return json.dumps({"items": [{"title": "<b>테스트</b> 기사", "description": "설명 &quot;인용&quot;", "originallink": f"https://press.example/{i}"} for i in range(5)]}).encode(), {}
-    if "search/image" in url:
-        return json.dumps({"items": [{"link": f"https://img.example/{i}.jpg"} for i in range(4)] + [{"link": "https://img.example/small.jpg"}]}).encode(), {}
     if "press.example" in url:
-        return ('<html><head><meta charset="utf-8"><meta property="og:image" content="https://img.example/og%s.jpg">'
-                '<meta property="og:site_name" content="가짜일보"></head><body><p>%s</p></body></html>' % (url[-1], "본문 문장입니다. " * 20)).encode(), {"Content-Type": "text/html"}
-    if "small" in url:
-        return fake_img(1, (300, 200)), {}
+        return ('<html><head><meta charset="utf-8"><meta property="og:image" content="https://img.example/%s.jpg">'
+                '<meta property="og:site_name" content="가짜일보"></head><body><p>%s</p></body></html>' % (abs(hash(url)) % 9999, "본문 문장입니다. " * 20)).encode(), {"Content-Type": "text/html"}
     if "img.example" in url:
         return fake_img(hash(url) % 1000), {}
     raise AssertionError(url)
@@ -50,9 +46,10 @@ calls = []
 def fake_llm(system, user, max_tokens=0):
     calls.append(user)
     if "골라라" in user:
-        return "```json\n" + json.dumps([{"topic": t, "category": c, "query": q} for t, c, q in TOPICS], ensure_ascii=False) + "\n```"
+        assert "[지금 화제]" in user and "부고" not in user.split("[기사 후보]")[1]
+        return "```json\n" + json.dumps([{"topic": t, "category": c, "query": q, "articles": [i + 1]} for i, (t, c, q) in enumerate(TOPICS)], ensure_ascii=False) + "\n```"
     return json.dumps({"ok": True, "headline": ['"이게 진짜 된다고?"', "역대 최고 기록 경신", "3시간마다 이슈 정리"],
-                       "caption": "제목 한 줄입니다\n\n첫 문단입니다. 사실만 씁니다.\n\n둘째 문단입니다.", "image_queries": ["검색어1", "검색어2"]}, ensure_ascii=False)
+                       "caption": "제목 한 줄입니다\n\n첫 문단입니다. 사실만 씁니다.\n\n둘째 문단입니다."}, ensure_ascii=False)
 
 
 collect.http_get = fake_get
@@ -64,7 +61,7 @@ telegram.worker = lambda path, payload, timeout=0: sent.append((path, payload)) 
 made = run.generate()
 assert len(made) == 3, made
 for m in made:
-    assert len(m["variants"]) == 3 and m["variants"][0]["credit"] == "가짜일보", m["variants"]
+    assert len(m["variants"]) >= 1 and m["variants"][0]["credit"] == "가짜일보", m["variants"]
     for v in m["variants"]:
         im = Image.open(os.path.join(config.OUT_DIR, v["file"])); assert im.size == (1080, 1350)
 assert made[0]["label"].startswith("[1/3]")
@@ -79,7 +76,7 @@ assert [x[0] for x in sent] == ["/cardnews/submit"] * 2 + ["/cardnews/auto"] * 2
 assert sent[0][1]["id"] == made2[0]["id"]
 # 사진이 하나도 없을 때 기본 배경
 images.candidates = lambda *a, **k: []
-it = run.build_set({"topic": "t", "category": "연예", "query": "q"}, "261117T0000-9")
+it = run.build_set({"topic": "t", "category": "연예", "query": "q", "articles": [{"title": "t", "link": "https://press.example/a/1", "source": "s", "desc": ""}]}, "261117T0000-9")
 assert it["variants"][0]["credit"] == config.BRAND
 # 정리
 open(os.path.join(config.OUT_DIR, "200101T0000-1_0.jpg"), "w").close()

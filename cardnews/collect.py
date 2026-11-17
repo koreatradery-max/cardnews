@@ -1,4 +1,4 @@
-"""이슈 후보 수집: RSS(화제성) + 네이버 뉴스 검색 API(상세·보강)."""
+"""이슈 후보 수집: 언론사 RSS(기사 원문) + 구글 뉴스 주요 기사 제목(화제성 참고). 모두 무료·키 불필요."""
 import html, json, re, urllib.parse, urllib.request
 import xml.etree.ElementTree as ET
 from . import config
@@ -35,49 +35,51 @@ def fetch_rss(category, url, limit=25):
     return items
 
 
-def naver(kind, query, display=10, sort="sim"):
-    """네이버 검색 API. kind: news | image"""
-    if not (config.NAVER_ID and config.NAVER_SECRET):
-        raise RuntimeError("NAVER_CLIENT_ID / NAVER_CLIENT_SECRET 이 설정되지 않았습니다.")
-    q = urllib.parse.urlencode({"query": query, "display": display, "sort": sort})
-    raw, _ = http_get(f"https://openapi.naver.com/v1/search/{kind}.json?{q}",
-                      {"X-Naver-Client-Id": config.NAVER_ID, "X-Naver-Client-Secret": config.NAVER_SECRET})
-    return json.loads(raw).get("items", [])
-
-
-def naver_news(query, display=10, sort="sim"):
-    out = []
-    for it in naver("news", query, display, sort):
-        link = it.get("originallink") or it.get("link") or ""
-        out.append({"title": clean(it.get("title")), "desc": clean(it.get("description")), "link": link,
-                    "naver_link": it.get("link") or "", "source": urllib.parse.urlparse(link).netloc.replace("www.", "")})
-    return out
-
-
 def collect_candidates(log=print):
-    """화제 이슈 후보 목록. 제목 기준으로 중복을 걸러 최대 150건."""
+    """(기사 후보, 화제 제목). 기사 후보는 원문 주소가 있는 기사로 제목 기준 중복을 걸러 최대 220건."""
     items = []
     for cat, url in config.RSS_FEEDS:
         try:
-            got = fetch_rss(cat, url)
+            got = fetch_rss(cat, url, 30)
+            for g in got:
+                g["source"] = g["source"] or urllib.parse.urlparse(g["link"]).netloc.replace("www.", "")
+                if any(w in g["title"] for w in config.GOOD_NEWS_WORDS):
+                    g["category"] = "미담"
             items += got
             log(f"  RSS {cat} {len(got)}건  {url[:60]}")
         except Exception as e:
             log(f"  RSS 실패 {url[:60]} ({e})")
-    for cat, q in config.NAVER_SEED_QUERIES:
-        try:
-            got = [{**n, "category": cat} for n in naver_news(q, 10, "date")]
-            items += got
-            log(f"  네이버 '{q}' {len(got)}건")
-        except Exception as e:
-            log(f"  네이버 실패 '{q}' ({e})")
     seen, uniq = set(), []
     for it in items:
         key = re.sub(r"[^0-9A-Za-z가-힣]", "", it["title"])[:18]
-        if key and key not in seen:
+        if key and key not in seen and it["link"].startswith("http") and not re.search(r"\[(부고|인사|포토|게시판)\]", it["title"]):
             seen.add(key)
             uniq.append(it)
-    return uniq[:150]
+    trends = []
+    for url in config.TREND_FEEDS:
+        try:
+            trends += [t["title"] for t in fetch_rss("", url, 20)]
+        except Exception as e:
+            log(f"  화제 피드 실패 {url[:50]} ({e})")
+    return uniq[:220], list(dict.fromkeys(trends))[:60]
+
+
+def related(issue_words, picked, pool, limit=6):
+    """고른 기사 + 같은 이슈를 다룬 다른 언론사 기사(제목에 핵심 단어가 2개 이상 겹치는 것)."""
+    out, links = list(picked), {p["link"] for p in picked}
+    words = [w for w in issue_words if len(w) >= 2]
+    scored = []
+    for it in pool:
+        if it["link"] in links:
+            continue
+        hit = sum(1 for w in words if w in it["title"])
+        if hit >= 2:
+            scored.append((hit, it))
+    for _, it in sorted(scored, key=lambda x: -x[0]):
+        out.append(it)
+        if len(out) >= limit:
+            break
+    return out[:limit]
 
 
 META = re.compile(r'<meta[^>]+(?:property|name)=["\']([^"\']+)["\'][^>]*content=["\']([^"\']*)["\']', re.I)
@@ -102,6 +104,7 @@ def fetch_article(url):
     paras = [clean(p) for p in re.findall(r"(?is)<p[^>]*>(.*?)</p>", body)]
     text = " ".join(p for p in paras if len(p) > 40)
     if len(text) < 200:                                    # <p> 를 안 쓰는 언론사: 태그를 지운 전체에서 긴 문장만
-        text = " ".join(s for s in re.split(r"(?<=다\.)\s+", clean(body)) if 30 < len(s) < 300)
+        alt = " ".join(s for s in re.split(r"(?<=다\.)\s+", clean(body)) if 30 < len(s) < 300)
+        text = alt if len(alt) > len(text) else text
     return {"text": (clean(meta.get("og:description", "")) + " " + text)[:2500],
             "image": html.unescape(meta.get("og:image", "")), "site": clean(meta.get("og:site_name", ""))}
