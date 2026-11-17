@@ -75,6 +75,23 @@ run.notify()
 assert [x[0] for x in sent] == ["/cardnews/submit"] * 2 + ["/cardnews/auto"] * 2, sent
 assert sent[0][1]["id"] == made2[0]["id"]
 # 사진이 하나도 없을 때 기본 배경
+# 네이버 키가 있으면 API HUB 주소·헤더로 호출하고, 관련 기사와 사진 후보가 추가된다
+config.NAVER_ID, config.NAVER_SECRET = "id", "sec"
+_get = collect.http_get
+def nav_get(url, headers=None, timeout=15, limit=0):
+    if "naverapihub.apigw.ntruss.com/search/v1/" in url:
+        assert headers == {"X-NCP-APIGW-API-KEY-ID": "id", "X-NCP-APIGW-API-KEY": "sec"}, headers
+        if "/news?" in url:
+            return json.dumps({"items": [{"title": "<b>네이버</b> 기사", "description": "요약", "originallink": "https://press.example/nv/1", "link": "https://n.news.naver.com/x"}]}).encode(), {}
+        assert "filter=large" in url
+        return json.dumps({"items": [{"link": "https://img.example/nv1.jpg"}, {"link": "https://img.example/nv2.jpg"}]}).encode(), {}
+    return _get(url, headers, timeout, limit)
+collect.http_get = nav_get
+it = run.build_set({"topic": "t", "category": "연예", "query": "q w", "articles": [{"title": "t", "link": "https://press.example/a/1", "source": "s", "desc": ""}]}, "261117T0000-8")
+assert len(it["variants"]) == 3 and it["variants"][-1]["credit"] == "img.example", it["variants"]
+assert "https://press.example/nv/1" in it["sources"] or len(it["sources"]) >= 1
+config.NAVER_ID = ""
+assert collect.naver_news("q") == [] and collect.naver_images("q") == []
 images.candidates = lambda *a, **k: []
 it = run.build_set({"topic": "t", "category": "연예", "query": "q", "articles": [{"title": "t", "link": "https://press.example/a/1", "source": "s", "desc": ""}]}, "261117T0000-9")
 assert it["variants"][0]["credit"] == config.BRAND

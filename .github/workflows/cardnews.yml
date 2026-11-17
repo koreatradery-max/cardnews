@@ -18,6 +18,8 @@ jobs:
     timeout-minutes: 30
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}          # 선택 (NAVER API HUB)
+      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}  # 선택
       CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
       CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
       CARDNEWS_MODEL: ${{ vars.CARDNEWS_MODEL }}

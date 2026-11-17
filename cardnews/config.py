@@ -16,6 +16,9 @@ VARIANTS = int(os.environ.get("CARDNEWS_VARIANTS", "3"))       # 이슈당 사�
 HISTORY_DAYS = 7                                               # 중복 제외 기간(일)
 
 GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
+# 선택 사항: NAVER API HUB(네이버 클라우드) 검색 API. 넣으면 관련 기사와 사진 후보가 늘어난다. 비우면 RSS 만으로 동작.
+NAVER_ID = os.environ.get("NAVER_CLIENT_ID", "")
+NAVER_SECRET = os.environ.get("NAVER_CLIENT_SECRET", "")
 LLM_MODEL = os.environ.get("CARDNEWS_MODEL", "")               # 비우면 무료로 쓸 수 있는 Flash-Lite 계열을 자동 선택
 WORKER_URL = os.environ.get("CARDNEWS_WORKER_URL", "").rstrip("/")   # 기존 텔레그램 Worker 주소
 WORKER_KEY = os.environ.get("CARDNEWS_KEY", "")                # Worker 와 공유하는 비밀값

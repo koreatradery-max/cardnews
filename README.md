@@ -22,6 +22,7 @@
 |---|---|
 | `GEMINI_API_KEY` | aistudio.google.com 에서 발급 (결제 수단 등록 없이 무료 등급 사용) |
 | `CARDNEWS_KEY` | 직접 정한 긴 임의 문자열 (Worker 에도 같은 값) |
+| `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET` | 선택. 네이버 클라우드 NAVER API HUB 에서 Application 등록(뉴스·이미지 검색) 후 받는 값. 넣으면 관련 기사와 사진 후보가 늘고, 없어도 동작합니다. |
 
 키가 등록되기 전에는 예약 실행이 아무 일도 하지 않고 끝납니다.
 

@@ -82,6 +82,8 @@ def generate():
 def build_set(issue, set_id, pool=()):
     log(f"3) 작성: {issue['topic']}")
     arts = collect.related(issue["query"].split(), issue["articles"], pool)
+    have = {a["link"] for a in arts}
+    arts += [n for n in collect.naver_news(issue["query"]) if n["link"] not in have][:4]   # 네이버 키가 있을 때만 보강
     metas = []
     for a in arts[:5]:
         metas.append({**a, **collect.fetch_article(a["link"])})
@@ -92,7 +94,7 @@ def build_set(issue, set_id, pool=()):
     if not text:
         log("   자료 부족으로 건너뜀")
         return None
-    imgs = images.candidates(metas, config.VARIANTS, log)
+    imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS, log)
     variants = []
     if not imgs:
         log("   쓸 수 있는 사진이 없어 기본 배경 사용")

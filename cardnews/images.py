@@ -23,18 +23,19 @@ def load_image(url):
 BAD_IMAGE = re.compile(r"logo|default|noimage|no_image|noimg|placeholder|blank|sns_share|ogimage|og_image", re.I)
 
 
-def candidates(articles_meta, want=3, log=print):
-    """[(PIL 이미지, 출처명)] 최대 want 개. 같은 이슈를 다룬 기사들의 대표 이미지를 언론사별로 하나씩."""
+def candidates(articles_meta, extra=(), want=3, log=print):
+    """[(PIL 이미지, 출처명)] 최대 want 개.
+    1순위: 같은 이슈를 다룬 기사들의 대표 이미지, 2순위: extra 로 받은 (주소, 출처) 목록(네이버 이미지 검색)."""
+    urls = [(a.get("image") or "", a.get("site") or a.get("source") or "언론 보도") for a in articles_meta] + list(extra)
     out, seen = [], set()
-    for a in articles_meta:
-        url = a.get("image") or ""
+    for url, credit in urls:
         key = url.split("?")[0]
         if not url.startswith("http") or key in seen or BAD_IMAGE.search(key.rsplit("/", 1)[-1]):
             continue
         seen.add(key)
         img = load_image(url)
         if img is not None:
-            out.append((img, a.get("site") or a.get("source") or "언론 보도"))
+            out.append((img, credit or "온라인"))
             if len(out) >= want:
                 break
     return out

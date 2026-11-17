@@ -82,6 +82,40 @@ def related(issue_words, picked, pool, limit=6):
     return out[:limit]
 
 
+def naver(kind, query, display=10, sort="sim", **extra):
+    """NAVER API HUB 검색 API (선택 사항). kind: news | image. 키가 없거나 실패하면 빈 목록."""
+    if not (config.NAVER_ID and config.NAVER_SECRET):
+        return []
+    q = urllib.parse.urlencode({"query": query, "display": display, "sort": sort, **extra})
+    try:
+        raw, _ = http_get(f"https://naverapihub.apigw.ntruss.com/search/v1/{kind}?{q}",
+                          {"X-NCP-APIGW-API-KEY-ID": config.NAVER_ID, "X-NCP-APIGW-API-KEY": config.NAVER_SECRET})
+        return json.loads(raw).get("items", [])
+    except Exception as e:
+        print(f"    네이버 {kind} 검색 실패 ({e})", flush=True)
+        return []
+
+
+def naver_news(query, display=8):
+    out = []
+    for it in naver("news", query, display, "sim"):
+        link = it.get("originallink") or it.get("link") or ""
+        if link.startswith("http"):
+            out.append({"category": "", "title": clean(it.get("title")), "desc": clean(it.get("description")), "link": link,
+                        "source": urllib.parse.urlparse(link).netloc.replace("www.", "")})
+    return out
+
+
+def naver_images(query, display=8):
+    """[(이미지 주소, 출처 도메인)] — 큰 이미지만."""
+    out = []
+    for it in naver("image", query, display, "sim", filter="large"):
+        link = it.get("link", "")
+        if link.startswith("http"):
+            out.append((link, urllib.parse.urlparse(link).netloc.replace("www.", "")))
+    return out
+
+
 META = re.compile(r'<meta[^>]+(?:property|name)=["\']([^"\']+)["\'][^>]*content=["\']([^"\']*)["\']', re.I)
 META2 = re.compile(r'<meta[^>]+content=["\']([^"\']*)["\'][^>]*(?:property|name)=["\']([^"\']+)["\']', re.I)
 
