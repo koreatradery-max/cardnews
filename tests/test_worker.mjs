@@ -21,6 +21,13 @@ const fsGet = async (env, path) => db[path] ? { ...db[path] } : null;
 const fsWrite = async (env, writes) => { for (const w of writes) db[w.path] = w.mask ? { ...(db[w.path] || {}), ...w.data } : { ...w.data }; };
 globalThis.fetch = async (url, init) => {
   url = String(url);
+  if (url.includes('api.telegram.org')) {
+    const p = Object.fromEntries([...init.body.entries()].filter(([k]) => k !== 'photo' && k !== 'card').map(([k, v]) => [k, (k === 'reply_markup' || k === 'media') ? JSON.parse(v) : v]));
+    const method = url.split('/').pop();
+    p._file = init.body.get('photo') ? 'photo' : (init.body.get('card') ? 'card' : null);
+    return { json: async () => tg(env, method, p) };
+  }
+  if (url.endsWith('.jpg')) return { ok: true, blob: async () => new Blob(['jpg']) };
   if (url.endsWith('.json')) return { ok: url.includes(ID), json: async () => item };
   if (url.includes('graph.threads.net')) {
     const params = init && init.body ? Object.fromEntries(init.body) : null;
@@ -39,7 +46,7 @@ globalThis.fetch = async (url, init) => {
 class Res { constructor(b, o) { this.body = b; this.status = (o && o.status) || 200; } }
 const mod = new Function('tg', 'adminIds', 'fsGet', 'fsWrite', 'Response', src + '\nreturn { cardnewsCallback, cardnewsApi, cnText };');
 const { cardnewsCallback, cardnewsApi, cnText } = mod(tg, () => ['111'], fsGet, fsWrite, Res);
-const env = { IG_USER_ID: '999', IG_ACCESS_TOKEN: 'TOK', CARDNEWS_BASE: 'https://raw.example/media', CARDNEWS_KEY: 'K' };
+const env = { BOT_TOKEN: 'B', IG_USER_ID: '999', IG_ACCESS_TOKEN: 'TOK', CARDNEWS_BASE: 'https://raw.example/media', CARDNEWS_KEY: 'K' };
 const api = async (path, body, key = 'K') => { const r = await cardnewsApi({ headers: { get: () => key }, json: async () => body }, env, { pathname: path }); return { status: r.status, ...JSON.parse(r.body) }; };
 const cq = (data, from = 111) => ({ id: 'c1', data, from: { id: from }, message: { chat: { id: 111 }, message_id: 7 } });
 const reset = () => { tgCalls = []; igCalls = []; };
@@ -51,7 +58,7 @@ assert.equal((await api('/cardnews/submit', { id: ID }, 'wrong')).status, 403);
 let r = await api('/cardnews/submit', { id: ID });
 assert.equal(r.result, 'sent');
 const sp = tgCalls[0][1];
-assert.equal(sp.chat_id, '111'); assert.equal(sp.photo, 'https://raw.example/media/' + ID + '_0.jpg');
+assert.equal(sp.chat_id, '111'); assert.equal(sp._file, 'photo');
 assert.equal(sp.caption, '[1/3] 연예\n\n제목\n\n본문입니다.\n\n📸 A일보\n팔로우');
 assert.ok(sp.reply_markup.inline_keyboard[0][0].callback_data.length <= 64);
 assert.equal(db['cardnews/' + ID].status, 'pending');
@@ -65,11 +72,11 @@ assert.equal(igCalls.length, 0); assert.equal(tgCalls[0][1].text, '권한이 없
 // 다른 사진 → 2번째로 교체(출처도 바뀜) → 10분 뒤 자동 승인은 지금 보이는 2번째 사진으로 업로드
 await fresh(); await cardnewsCallback(env, cq('cn:nx:' + ID));
 const em = tgCalls.find(c => c[0] === 'editMessageMedia')[1];
-assert.equal(em.media.media, 'https://raw.example/media/' + ID + '_1.jpg'); assert.ok(em.media.caption.includes('📸 B뉴스'));
+assert.equal(em.media.media, 'attach://card'); assert.equal(em._file, 'card'); assert.ok(em.media.caption.includes('📸 B뉴스'));
 assert.equal(db['cardnews/' + ID].v, 1);
 // 이전 사진 → 1번째로 되돌아가고, 다시 다음 사진 → 2번째
 reset(); await cardnewsCallback(env, cq('cn:pv:' + ID));
-assert.equal(tgCalls.find(c => c[0] === 'editMessageMedia')[1].media.media, 'https://raw.example/media/' + ID + '_0.jpg'); assert.equal(db['cardnews/' + ID].v, 0);
+assert.equal(db['cardnews/' + ID].v, 0);
 reset(); await cardnewsCallback(env, cq('cn:pv:' + ID)); assert.equal(db['cardnews/' + ID].v, 1);   // 첫 장에서 이전 → 마지막 장
 const kb = tgCalls.find(c => c[0] === 'editMessageMedia')[1].reply_markup.inline_keyboard[1];
 assert.equal(kb[0].callback_data, 'cn:pv:' + ID); assert.ok(kb[1].text.includes('(2/2)'));

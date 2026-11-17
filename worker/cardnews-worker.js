@@ -35,6 +35,19 @@ async function cnItem(env, id) {
   return null;
 }
 
+/* 텔레그램에 사진을 주소가 아닌 파일로 직접 올린다 (텔레그램 서버가 이미지 주소를 못 읽는 경우 대비) */
+async function cnTgPhoto(env, method, params, imageUrl) {
+  const img = await fetch(imageUrl);
+  if (!img.ok) return { ok: false, description: 'image ' + img.status };
+  const blob = await img.blob();
+  const form = new FormData();
+  for (const [k, v] of Object.entries(params)) form.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+  if (method === 'sendPhoto') form.append('photo', blob, 'card.jpg');
+  else form.append('card', blob, 'card.jpg');
+  const r = await fetch(`https://api.telegram.org/bot${env.BOT_TOKEN}/${method}`, { method: 'POST', body: form });
+  return r.json().catch(() => ({ ok: false, description: 'bad response ' + r.status }));
+}
+
 async function cnInstagram(env, path, body) {
   const host = env.IG_GRAPH_HOST || 'graph.instagram.com';
   const init = body
@@ -100,7 +113,7 @@ async function cardnewsApi(req, env, url) {
   if (url.pathname === '/cardnews/submit') {
     const old = await fsGet(env, `cardnews/${id}`);
     if (old) return cnJson({ ok: true, result: 'already_sent' });
-    const r = await tg(env, 'sendPhoto', { chat_id: admin, photo: cnBase(env) + item.variants[0].file, caption: cnText(item, 0), reply_markup: cnKeyboard(id, 0, item.variants.length) });
+    const r = await cnTgPhoto(env, 'sendPhoto', { chat_id: admin, caption: cnText(item, 0), reply_markup: cnKeyboard(id, 0, item.variants.length) }, cnBase(env) + item.variants[0].file);
     if (!r.ok) return cnJson({ ok: false, error: r.description || 'sendPhoto 실패' }, 502);
     await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'pending', chat: String(admin), mid: r.result.message_id, v: 0, at: Date.now() } }]);
     return cnJson({ ok: true, result: 'sent' });
@@ -131,8 +144,8 @@ async function cardnewsCallback(env, cq) {
 
   if (act === 'nx' || act === 'pv') {
     const nv = (v + (act === 'pv' ? n - 1 : 1)) % n;
-    const r = await tg(env, 'editMessageMedia', { chat_id: where.chat, message_id: where.mid,
-      media: { type: 'photo', media: cnBase(env) + item.variants[nv].file, caption: cnText(item, nv) }, reply_markup: cnKeyboard(id, nv, n) });
+    const r = await cnTgPhoto(env, 'editMessageMedia', { chat_id: where.chat, message_id: where.mid,
+      media: { type: 'photo', media: 'attach://card', caption: cnText(item, nv) }, reply_markup: cnKeyboard(id, nv, n) }, cnBase(env) + item.variants[nv].file);
     if (r.ok) await fsWrite(env, [{ path: `cardnews/${id}`, data: { v: nv }, mask: true }]);
     await answer(r.ok ? `사진 ${nv + 1}/${n}` : '사진을 바꾸지 못했습니다.');
     return ok;
