@@ -5,7 +5,8 @@ const src = fs.readFileSync(new URL('../worker/cardnews-worker.js', import.meta.
 const ID = '261117T1507-1';
 const item = { id: ID, label: '[1/3] 연예', caption: '제목\n\n본문입니다.', cta: '팔로우', headline: ['줄1', '줄2'],
   variants: [{ file: ID + '_0.jpg', credit: 'A일보' }, { file: ID + '_1.jpg', credit: 'B뉴스' }] };
-let tgCalls = [], igCalls = [], igMode = 'ok', markup = null, db = {};
+let tgCalls = [], igCalls = [], thCalls = [], thMode = 'ok', igMode = 'ok', markup = null, db = {};
+globalThis.setTimeout = (f) => f();
 const tg = async (env, method, p) => {
   tgCalls.push([method, p]);
   if (method === 'sendPhoto') { markup = JSON.stringify(p.reply_markup); return { ok: true, result: { message_id: 7 } }; }
@@ -21,6 +22,14 @@ const fsWrite = async (env, writes) => { for (const w of writes) db[w.path] = w.
 globalThis.fetch = async (url, init) => {
   url = String(url);
   if (url.endsWith('.json')) return { ok: url.includes(ID), json: async () => item };
+  if (url.includes('graph.threads.net')) {
+    const params = init && init.body ? Object.fromEntries(init.body) : null;
+    thCalls.push([url.split('?')[0], params]);
+    if (thMode === 'fail' && url.endsWith('/threads')) return { json: async () => ({ error: { message: 'th down' } }) };
+    if (url.endsWith('/threads')) return { json: async () => ({ id: 'TBOX' }) };
+    if (url.endsWith('/threads_publish')) return { json: async () => ({ id: 'TPOST' }) };
+    return { json: async () => ({ permalink: 'https://www.threads.net/@x/post/abc' }) };
+  }
   const body = init && init.body ? JSON.parse(init.body) : null;
   igCalls.push([url, body]);
   if (url.endsWith('/media')) return { json: async () => igMode === 'expired' ? { error: { message: 'token expired', code: 190 } } : { id: 'BOX1' } };
@@ -93,6 +102,26 @@ igMode = 'ok'; reset(); await cardnewsCallback(env, cq('cn:ok:' + ID)); assert.e
 // 자동 승인 중 실패하면 failed 로 남고 버튼으로 재시도 가능
 await fresh(); igMode = 'expired'; assert.equal((await api('/cardnews/auto', { id: ID })).result, 'failed');
 igMode = 'ok'; reset(); await cardnewsCallback(env, cq('cn:ok:' + ID)); assert.equal(db['cardnews/' + ID].status, 'posted');
+
+// 스레드 토큰이 없으면 스레드는 호출하지 않음
+assert.equal(thCalls.length, 0);
+// 스레드 토큰이 있으면 인스타그램 게시 후 스레드에도 게시, 버튼·알림에 링크 포함
+env.THREADS_ACCESS_TOKEN = 'TH';
+await fresh(); await cardnewsCallback(env, cq('cn:ok:' + ID));
+assert.equal(thCalls[0][0], 'https://graph.threads.net/v1.0/me/threads');
+assert.deepEqual(thCalls[0][1], { media_type: 'IMAGE', image_url: 'https://raw.example/media/' + ID + '_0.jpg', text: '제목\n\n본문입니다.\n\n📸 A일보', access_token: 'TH' });
+assert.equal(thCalls[1][1].creation_id, 'TBOX');
+assert.ok(tgCalls.at(-1)[1].text.includes('스레드: https://www.threads.net/@x/post/abc'));
+const row = tgCalls.find(c => c[0] === 'editMessageCaption')[1].reply_markup.inline_keyboard[0];
+assert.deepEqual(row.map(b => b.text), ['인스타그램 보기', '스레드 보기']);
+// 스레드만 실패해도 인스타그램은 게시 완료로 처리
+thCalls = []; thMode = 'fail'; await fresh(); await cardnewsCallback(env, cq('cn:ok:' + ID));
+assert.equal(db['cardnews/' + ID].status, 'posted'); assert.ok(tgCalls.at(-1)[1].text.includes('스레드 업로드 실패: th down'));
+// 긴 본문은 500자 제한에 맞게 줄임
+thCalls = []; thMode = 'ok'; item.caption = ['제목', '가'.repeat(200), '나'.repeat(200), '다'.repeat(200)].join('\n\n');
+await fresh(); await cardnewsCallback(env, cq('cn:ok:' + ID));
+assert.ok(thCalls[0][1].text.length <= 470 && thCalls[0][1].text.endsWith('📸 A일보') && !thCalls[0][1].text.includes('다다'));
+item.caption = '제목\n\n본문입니다.'; delete env.THREADS_ACCESS_TOKEN;
 
 // 오류 알림
 reset(); await api('/cardnews/notice', { text: '오류' }); assert.equal(tgCalls[0][1].text, '오류');

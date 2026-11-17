@@ -16,6 +16,7 @@
  *   IG_USER_ID       (Text)    인스타그램 프로페셔널 계정 ID (숫자)
  *   IG_ACCESS_TOKEN  (Secret)  인스타그램 사용자 액세스 토큰 (장기 토큰, 60일마다 갱신)
  *   IG_GRAPH_HOST    (Text, 선택) 기본 graph.instagram.com (Facebook 로그인 토큰이면 graph.facebook.com)
+ *   THREADS_ACCESS_TOKEN (Secret, 선택) 스레드 사용자 액세스 토큰. 넣으면 인스타그램 게시 후 스레드에도 같은 사진·글을 올림
  *
  * [상태 저장] Firestore cardnews/{세트ID}: { status: pending|uploading|posted|rejected, chat, mid, v, at }
  */
@@ -69,9 +70,10 @@ async function cnApprove(env, id, item, st, auto) {
   try {
     const post = await cnPublish(env, cnBase(env) + item.variants[v].file, cnCaption(item, v));
     await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'posted', permalink: post.permalink, auto: !!auto, postedAt: Date.now() }, mask: true }]);
-    const done = post.permalink ? [[{ text: '게시물 보기', url: post.permalink }]] : [];
+    const th = await cnThreads(env, cnBase(env) + item.variants[v].file, item, v);
+    const done = [[post.permalink && { text: '인스타그램 보기', url: post.permalink }, th && th.permalink && { text: '스레드 보기', url: th.permalink }].filter(Boolean)].filter(r => r.length);
     await tg(env, 'editMessageCaption', { chat_id: st.chat, message_id: st.mid, caption: cnText(item, v, auto ? '✅ 자동 승인 · 업로드 완료' : '✅ 업로드 완료'), reply_markup: { inline_keyboard: done } });
-    await tg(env, 'sendMessage', { chat_id: st.chat, text: `✅ 인스타그램 업로드 완료${auto ? ' (10분 무응답 자동 승인)' : ''}\n${(item.headline || []).join(' ')}${post.permalink ? '\n' + post.permalink : ''}` });
+    await tg(env, 'sendMessage', { chat_id: st.chat, text: `✅ 인스타그램 업로드 완료${auto ? ' (자동 승인)' : ''}\n${(item.headline || []).join(' ')}${post.permalink ? '\n' + post.permalink : ''}${th ? (th.permalink ? '\n스레드: ' + th.permalink : (th.id ? '\n스레드 업로드 완료' : '\n⚠️ 스레드 업로드 실패: ' + th.error)) : ''}` });
     return 'posted';
   } catch (e) {
     await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: auto ? 'failed' : 'pending' }, mask: true }]);
@@ -149,4 +151,38 @@ async function cardnewsCallback(env, cq) {
   }
   await answer('');
   return ok;
+}
+
+/* 스레드 동시 게시 (THREADS_ACCESS_TOKEN 이 있을 때만). 반환: null | { id, permalink } | { error } — 실패해도 인스타그램 게시에는 영향 없음 */
+async function cnThreads(env, imageUrl, item, v) {
+  if (!env.THREADS_ACCESS_TOKEN) return null;
+  const call = async (path, params, method) => {
+    const body = new URLSearchParams({ ...params, access_token: env.THREADS_ACCESS_TOKEN });
+    const res = method === 'GET'
+      ? await fetch(`https://graph.threads.net/v1.0/${path}?${body}`)
+      : await fetch(`https://graph.threads.net/v1.0/${path}`, { method: 'POST', body });
+    return res.json().catch(() => ({ error: { message: 'bad response ' + res.status } }));
+  };
+  try {
+    // 스레드 글자 수 제한(500자)에 맞춰 뒤 문단부터 줄인다
+    const tail = `\n\n📸 ${item.variants[v].credit}`;
+    let paras = String(item.caption || '').split('\n\n');
+    while (paras.length > 1 && (paras.join('\n\n') + tail).length > 470) paras.pop();
+    let text = paras.join('\n\n');
+    if ((text + tail).length > 470) text = text.slice(0, 470 - tail.length - 1) + '…';
+    const user = env.THREADS_USER_ID || 'me';
+    const box = await call(`${user}/threads`, { media_type: 'IMAGE', image_url: imageUrl, text: text + tail });
+    if (!box.id) return { error: box.error && box.error.message || '컨테이너 생성 실패' };
+    let pub = null;
+    for (let i = 0; i < 6; i++) {
+      await new Promise(r => setTimeout(r, 2500));           // 컨테이너 처리 시간을 기다린 뒤 게시
+      pub = await call(`${user}/threads_publish`, { creation_id: box.id });
+      if (pub.id) break;
+    }
+    if (!pub || !pub.id) return { error: pub && pub.error && pub.error.message || '게시 실패' };
+    const info = await call(`${pub.id}`, { fields: 'permalink' }, 'GET');
+    return { id: pub.id, permalink: info.permalink || '' };
+  } catch (e) {
+    return { error: e.message };
+  }
 }
