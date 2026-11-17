@@ -135,11 +135,11 @@ def notify():
     sent = []
     for sid in ids:
         r = {}
-        for attempt in range(4):                       # 방금 올린 이미지가 주소에 반영될 때까지 잠깐 걸릴 수 있다
+        for attempt in range(10):                      # 방금 올린 이미지가 공개 주소에 반영될 때까지 몇 분 걸릴 수 있다
             r = telegram.submit(sid)
             if r.get("ok"):
                 break
-            time.sleep(10)
+            time.sleep(20)
         log("전송", sid, r.get("ok"), r.get("error", ""))
         if r.get("ok"):
             sent.append(sid)

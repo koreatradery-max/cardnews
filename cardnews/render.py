@@ -8,7 +8,27 @@ MX = 84            # 좌우 여백
 BOTTOM = 150       # 헤드라인 아래 여백
 
 
+def fit_small(img):
+    """작은 사진: 크게 확대하면 흐려지므로, 흐리게 확대한 배경 위에 가로폭에 맞춘 원본을 위쪽에 얹는다."""
+    bg = cover_raw(img).filter(ImageFilter.GaussianBlur(40))
+    bg = Image.blend(bg, Image.new("RGB", (W, H), (0, 0, 0)), 0.35)
+    w = W
+    h = round(img.height * W / img.width)
+    if h > H * 0.62:
+        h = round(H * 0.62)
+        w = round(img.width * h / img.height)
+    fg = img.resize((w, h), Image.LANCZOS).filter(ImageFilter.UnsharpMask(2, 80, 2))
+    bg.paste(fg, ((W - w) // 2, max(0, round(H * 0.36 - h / 2))))
+    return bg
+
+
 def cover(img, focus_y=0.3):
+    if max(W / img.width, H / img.height) > 2.2:       # 2.2배 넘게 키워야 하면 흐림 배경 방식
+        return fit_small(img)
+    return cover_raw(img, focus_y)
+
+
+def cover_raw(img, focus_y=0.3):
     r = max(W / img.width, H / img.height)
     img = img.resize((max(W, round(img.width * r)), max(H, round(img.height * r))), Image.LANCZOS)
     x = (img.width - W) // 2

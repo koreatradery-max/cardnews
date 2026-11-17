@@ -15,7 +15,7 @@ def load_image(url):
     except Exception:
         return None
     w, h = img.size
-    if w < 600 or h < 380 or not (0.45 <= w / h <= 2.4):      # 너무 작으면 확대 시 흐려진다
+    if w < 480 or h < 270 or not (0.45 <= w / h <= 2.4):      # 작은 사진은 render 에서 흐림 배경 위에 얹는다
         return None
     return img
 
