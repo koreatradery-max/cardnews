@@ -82,6 +82,18 @@ def related(issue_words, picked, pool, limit=6):
     return out[:limit]
 
 
+def cross_sources(query_words, log=print):
+    """교차 확인용: 구글 뉴스 검색에서 같은 이슈를 다룬 기사 제목과 언론사 [(제목, 언론사)]. 실패하면 빈 목록."""
+    words = [w for w in query_words if len(w) >= 2]
+    q = urllib.parse.urlencode({"q": " ".join(words[:4]) + " when:2d", "hl": "ko", "gl": "KR", "ceid": "KR:ko"})
+    try:
+        items = fetch_rss("", "https://news.google.com/rss/search?" + q, 20)
+    except Exception as e:
+        log(f"   교차 확인 검색 실패 ({e})")
+        return []
+    return [(it["title"], it["source"]) for it in items if it["source"] and sum(1 for w in words if w in it["title"]) >= 2]
+
+
 def naver(kind, query, display=10, sort="sim", **extra):
     """NAVER API HUB 검색 API (선택 사항). kind: news | image. 키가 없거나 실패하면 빈 목록."""
     if not (config.NAVER_ID and config.NAVER_SECRET):

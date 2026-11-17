@@ -69,9 +69,9 @@ def parse_json(text):
 
 SELECT_SYS = """너는 한국 인스타그램 이슈 매거진 계정의 에디터다. 뉴스 후보 목록에서 지금 가장 화제성이 큰 이슈를 고른다.
 규칙:
-- 카테고리: 대형 이슈·속보 / 정치·사회 / 기부·선행·감동 / 연예.
-- 앞에서부터 3개가 서로 다른 카테고리가 되도록 순서를 정한다. 정치 이슈는 앞 3개 중 1개까지만 넣고, [연예]·[미담] 후보 중 화제성 있는 것이 있으면 앞 3개 안에 포함한다.
-- 여러 언론사가 동시에 다루는 이슈일수록 화제성이 높다.
+- 카테고리: 대형 이슈·속보 / 정치·사회 / 기부·선행·감동 / 연예. 카테고리가 겹쳐도 되며 화제성만 본다.
+- 유명인의 사건·사고(음주운전, 논란, 열애·결별 등)처럼 사람들이 많이 이야기하는 이슈도 좋다.
+- 여러 언론사가 동시에 다루는 이슈일수록 화제성이 높다. 한 언론사만 보도한 이슈는 고르지 않는다.
 - '이미 다룬 이슈'와 같은 사건은 절대 고르지 않는다. 후속 보도도 제외한다.
 - 사망 사고의 잔혹한 묘사, 성범죄 피해자 신상, 미성년자 관련 선정적 이슈, 근거 없는 루머는 제외한다.
 - 서로 다른 사건으로 요청한 개수만큼 화제성 순으로 고른다.
@@ -110,17 +110,79 @@ def select_issues(candidates, trends, history_topics, n):
     return out
 
 
-def write_set(issue, articles, bodies):
-    mat = [f"- {a['title']} ({a['source']})" + (f": {a['desc']}" if a.get("desc") else "") for a in articles[:8]]
-    for b in bodies:
-        if b:
-            mat.append("\n[기사 본문 발췌]\n" + b)
-    user = f"[이슈] {issue['topic']}\n[카테고리] {issue['category']}\n\n[기사 자료]\n" + "\n".join(mat)
+def write_set(issue, material):
+    user = f"[이슈] {issue['topic']}\n[카테고리] {issue['category']}\n\n[기사 자료]\n" + material
     d = parse_json(llm(WRITE_SYS, user))
     if not d.get("ok", True) or not d.get("headline") or not d.get("caption"):
         return None
-    head = [re.sub(r"\s+", " ", str(h)).strip().rstrip(".") for h in d["headline"] if str(h).strip()][:3]
-    cap = re.sub(r"\n{3,}", "\n\n", str(d["caption"]).strip())[:600]
-    if len(head) < 2:
+    return tidy(d)
+
+
+VERIFY_SYS = """너는 뉴스 팩트체커다. 카드뉴스 초안의 모든 내용을 [기사 자료]와 한 문장씩 대조한다.
+확인 대상: 사람 이름, 직함·소속, 숫자·금액·기간, 날짜·요일, 장소, 누가 무엇을 했는지, 인용구, 판결·처분 내용, 혐의인지 확정인지.
+판정 기준:
+- 자료에 같은 내용이 명시돼 있으면 근거 있음. 자료에 없거나, 자료와 다르거나, 여러 기사를 섞어 추정한 내용이면 근거 없음.
+- 네가 알고 있는 배경지식은 근거가 아니다. 오직 [기사 자료]만 근거다.
+- 혐의·의혹을 확정된 사실처럼 쓴 문장, 자료보다 과장한 헤드라인도 근거 없음으로 본다.
+근거 없는 부분이 있으면 그 부분을 지우거나 자료 표현대로 고친 수정본을 만든다. 형식(헤드라인 2~3줄·한 줄 8~14자, 본문 첫 줄 짧은 제목 + 빈 줄 + 2~3문단, ~습니다체, 이모지 없음)은 유지한다.
+이슈의 핵심 사실 자체가 자료로 확인되지 않으면 reject 한다.
+JSON 객체만 출력한다: {"unsupported": ["근거 없는 내용 1", ...], "reject": false, "headline": ["줄1","줄2"], "caption": "본문(수정본 또는 원문 그대로)"}"""
+
+
+def material_text(articles, bodies, extra_titles=()):
+    mat = [f"- {a['title']} ({a['source']})" + (f": {a['desc']}" if a.get("desc") else "") for a in articles[:8]]
+    mat += [f"- {t}" for t in extra_titles[:10]]
+    for b in bodies:
+        if b:
+            mat.append("\n[기사 본문 발췌]\n" + b)
+    return "\n".join(mat)
+
+
+def numbers_ok(draft, material):
+    """초안에 나온 숫자가 모두 기사 자료에 있는지 (쉼표 무시). 없는 숫자 목록을 돌려준다."""
+    norm = lambda t: re.sub(r"(?<=\d),(?=\d)", "", t)
+    src = norm(material)
+    nums = set(re.findall(r"\d+(?:\.\d+)?", norm(" ".join(draft["headline"]) + " " + draft["caption"])))
+    return sorted(n for n in nums if n not in src)
+
+
+def tidy(draft):
+    head = [re.sub(r"\s+", " ", str(h)).strip().rstrip(".") for h in draft.get("headline", []) if str(h).strip()][:3]
+    cap = re.sub(r"\n{3,}", "\n\n", str(draft.get("caption", "")).strip())[:600]
+    if len(head) < 2 or not cap:
         return None
+    first = cap.split("\n", 1)[0].strip()
+    if len(first) > 34 or first.endswith(("다.", "요.")):          # 첫 줄 제목이 빠졌으면 헤드라인으로 만든다
+        cap = " ".join(h.strip('"“”') for h in head) + "\n\n" + cap
     return {"headline": head, "caption": cap}
+
+
+def verify(draft, material):
+    """AI 검수 1회. (수정본 또는 None, 근거 없는 내용 목록)"""
+    user = ("[기사 자료]\n" + material + "\n\n[카드뉴스 초안]\n헤드라인: " + " / ".join(draft["headline"]) +
+            "\n본문:\n" + draft["caption"])
+    d = parse_json(llm(VERIFY_SYS, user))
+    bad = [str(x) for x in d.get("unsupported", []) if str(x).strip()]
+    if d.get("reject"):
+        return None, bad or ["핵심 사실 확인 불가"]
+    return tidy({"headline": d.get("headline") or draft["headline"], "caption": d.get("caption") or draft["caption"]}), bad
+
+
+def double_check(draft, material, log=print):
+    """2중 검증: ① AI 검수(근거 없는 내용 삭제·수정) → ② 수정본을 다시 검수해 문제 0건 + 숫자 자동 대조. 통과 못 하면 None."""
+    fixed, bad = verify(draft, material)
+    if fixed is None:
+        log(f"   검증 탈락(1차): {bad}")
+        return None, bad
+    removed = list(bad)
+    if bad:
+        log(f"   1차 검수에서 수정: {bad}")
+        fixed, bad2 = verify(fixed, material)
+        if fixed is None or bad2:
+            log(f"   검증 탈락(2차): {bad2}")
+            return None, removed + bad2
+    missing = numbers_ok(fixed, material)
+    if missing:
+        log(f"   검증 탈락(자료에 없는 숫자): {missing}")
+        return None, removed + ["숫자 " + ", ".join(missing)]
+    return fixed, removed

@@ -52,7 +52,7 @@ def generate():
         raise RuntimeError(f"뉴스 후보가 너무 적습니다 ({len(cands)}건). 수집 채널을 확인하세요.")
     log(f"   후보 {len(cands)}건")
     log("2) 이슈 선별")
-    picks = write.select_issues(cands, trends, [h["topic"] for h in history], config.SETS_PER_RUN + 3)
+    picks = write.select_issues(cands, trends, [h["topic"] for h in history], config.SETS_PER_RUN + 5)
     made = []
     for issue in picks:
         if len(made) >= config.SETS_PER_RUN:
@@ -69,7 +69,9 @@ def generate():
             made.append(item)
             history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
     for i, item in enumerate(made):
-        item["label"] = f"[{i + 1}/{len(made)}] {item['category']}"
+        v = item["verify"]
+        item["label"] = (f"[{i + 1}/{len(made)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
+                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
     json.dump({"at": now.isoformat(), "ids": [m["id"] for m in made]},
@@ -81,7 +83,8 @@ def generate():
 
 def build_set(issue, set_id, pool=()):
     log(f"3) 작성: {issue['topic']}")
-    arts = collect.related(issue["query"].split(), issue["articles"], pool)
+    words = issue["query"].split()
+    arts = collect.related(words, issue["articles"], pool)
     have = {a["link"] for a in arts}
     arts += [n for n in collect.naver_news(issue["query"]) if n["link"] not in have][:4]   # 네이버 키가 있을 때만 보강
     metas = []
@@ -90,9 +93,20 @@ def build_set(issue, set_id, pool=()):
     if not any(len(m["text"]) > 150 for m in metas):
         log("   기사 본문을 읽지 못해 건너뜀")
         return None
-    text = write.write_set(issue, arts, [m["text"] for m in metas[:3]])
-    if not text:
+    # 검증 ①: 교차 확인 — 서로 다른 언론사 2곳 이상이 보도한 이슈만 쓴다
+    cross = collect.cross_sources(words, log)
+    publishers = sorted({(m.get("site") or m["source"]) for m in metas} | {src for _, src in cross})
+    if len(publishers) < 2:
+        log(f"   검증 탈락(교차 확인): 보도한 언론사가 {len(publishers)}곳뿐")
+        return None
+    material = write.material_text(arts, [m["text"] for m in metas[:3]], [f"{t} ({src})" for t, src in cross])
+    draft = write.write_set(issue, material)
+    if not draft:
         log("   자료 부족으로 건너뜀")
+        return None
+    # 검증 ②: AI 검수 2회 + 숫자 자동 대조
+    text, fixed = write.double_check(draft, material, log)
+    if not text:
         return None
     imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS, log)
     variants = []
@@ -107,7 +121,8 @@ def build_set(issue, set_id, pool=()):
         variants.append({"file": f, "credit": credit})
     return {"id": set_id, "category": issue["category"], "topic": issue["topic"], "headline": text["headline"],
             "caption": text["caption"], "cta": config.CTA, "variants": variants,
-            "sources": [a["link"] for a in arts[:3]]}
+            "sources": [a["link"] for a in arts[:3]],
+            "verify": {"publishers": publishers, "fixed": fixed}}
 
 
 def notify():
