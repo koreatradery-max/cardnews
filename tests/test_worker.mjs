@@ -139,7 +139,11 @@ assert.equal(cnText(item, 0), '[1/3] 연예\n\n제목\n\n본문입니다.\n\n�
 assert.equal(await cardnewsCron(env, new Date('2026-11-18T03:00:30Z')), 'no_token');
 env.GH_DISPATCH_TOKEN = 'G';
 assert.equal(await cardnewsCron(env, new Date('2026-11-18T03:01:00Z')), 'skip');      // 정각 아님
-assert.equal(await cardnewsCron(env, new Date('2026-11-18T04:00:00Z')), 'skip');      // 3시간 단위 아님
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T04:00:00Z')), 'dispatched');  // 기본 1시간마다
+env.CARDNEWS_EVERY_HOURS = '3';
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T04:00:00Z')), 'skip');        // 3시간 설정이면 한국 13시는 건너뜀
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T06:00:00Z')), 'dispatched');  // 한국 15시
+delete env.CARDNEWS_EVERY_HOURS; ghCalls = [];
 assert.equal(await cardnewsCron(env, new Date('2026-11-18T15:00:10Z')), 'dispatched'); // 한국 0시
 assert.equal(ghCalls[0][0], 'https://api.github.com/repos/koreatradery-max/cardnews/actions/workflows/cardnews.yml/dispatches');
 assert.equal(ghCalls[0][1].headers.Authorization, 'Bearer G'); assert.deepEqual(JSON.parse(ghCalls[0][1].body), { ref: 'main' });

@@ -204,11 +204,12 @@ async function cnThreads(env, imageUrl, item, v) {
   }
 }
 
-/* 정시 실행: Worker 의 1분 크론에서 호출. 한국 시간 0·3·6·9·12·15·18·21시 정각에 GitHub Actions 를 실행시킨다 */
+/* 정시 실행: Worker 의 1분 크론에서 호출. 매 정각(CARDNEWS_EVERY_HOURS 시간마다, 기본 1시간)에 GitHub Actions 를 실행시킨다 */
 async function cardnewsCron(env, now) {
   if (!env.GH_DISPATCH_TOKEN) return 'no_token';
   const d = now || new Date();
-  if (d.getUTCMinutes() !== 0 || d.getUTCHours() % 3 !== 0) return 'skip';
+  const every = Math.max(1, Number(env.CARDNEWS_EVERY_HOURS || 1));        // 몇 시간마다 실행할지 (기본 1시간)
+  if (d.getUTCMinutes() !== 0 || ((d.getUTCHours() + 9) % 24) % every !== 0) return 'skip';
   const repo = env.CARDNEWS_REPO || 'koreatradery-max/cardnews';
   const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/cardnews.yml/dispatches`, {
     method: 'POST',
