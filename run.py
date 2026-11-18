@@ -86,28 +86,33 @@ def generate():
 
 
 def request(path):
-    """요청 주제 1건으로 세트를 만든다 (requests/latest.json: {"topic", "query", "category"})."""
-    req = json.load(open(path, encoding="utf-8"))
+    """요청 주제로 세트를 만든다. requests/latest.json: {"topic","query","category"} 또는 그 목록."""
+    reqs = json.load(open(path, encoding="utf-8"))
+    reqs = reqs if isinstance(reqs, list) else [reqs]
     now = datetime.now(config.KST)
     os.makedirs(config.OUT_DIR, exist_ok=True)
     cands, _ = collect.collect_candidates(log)
-    words = req["query"].split()
-    issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
-             "articles": collect.related(words, [], cands)[:3]}
-    log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
-    item = build_set(issue, f"{now:%y%m%dT%H%M}-0", cands)
-    ids = []
-    if item:
+    history, ids = load_history(), []
+    for n, req in enumerate(reqs):
+        words = req["query"].split()
+        issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
+                 "articles": collect.related(words, [], cands)[:3]}
+        log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
+        try:
+            item = build_set(issue, f"{now:%y%m%dT%H%M}-{n}", cands)
+        except Exception as e:
+            log(f"   실패: {e}")
+            item = None
+        if not item:
+            telegram.send_text(f"요청 카드뉴스를 만들지 못했습니다: {issue['topic']}\n(보도 2곳 이상 확인 또는 AI 검수를 통과하지 못함)")
+            continue
         v = item["verify"]
-        item["label"] = (f"[요청] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
+        item["label"] = (f"[요청 {n + 1}/{len(reqs)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
                          + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         ids.append(item["id"])
-        history = load_history()
         history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
-        save_history(history)
-    else:
-        telegram.send_text(f"요청 카드뉴스를 만들지 못했습니다: {issue['topic']}\n(보도 2곳 이상 확인 또는 AI 검수를 통과하지 못함)")
+    save_history(history)
     json.dump({"at": now.isoformat(), "ids": ids, "auto_min": 0},
               open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
 
