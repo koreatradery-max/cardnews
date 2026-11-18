@@ -3,6 +3,8 @@
   python run.py generate          이슈 수집 → 문구 작성 → 썸네일 제작 (out/ 에 저장)
   python run.py notify            out/pending.json 의 세트를 텔레그램으로 승인 요청 → 10분 무응답 시 자동 승인
   python run.py prune DIR HOURS   DIR 안의 오래된 세트 파일 삭제 (이미지 보관 브랜치 정리용)
+  python run.py admin DIR MODE    DIR(이미지 보관 브랜치) 의 세트 점검. MODE: status | resend | bulk
+                                   resend = 텔레그램에 못 간 세트 재전송, bulk = 재전송 후 아직 안 올라간 세트 일괄 업로드
 """
 import json, os, re, sys, time, traceback
 from datetime import datetime, timedelta
@@ -168,6 +170,39 @@ def prune(folder, hours):
     log(f"정리: {n}개 삭제")
 
 
+def admin(folder, mode):
+    ids = sorted({m.group(1) for n in os.listdir(folder) if (m := re.match(r"(\d{6}T\d{4}-\d+)\.json$", n))})
+    log(f"세트 {len(ids)}개")
+    status = lambda: {x["id"]: x for x in telegram.worker("/cardnews/status", {"ids": ids}).get("items", [])}
+    st = status()
+    for i in ids:
+        x = st.get(i, {})
+        log(f"  {i}: {x.get('status')}" + (f"  오류: {x['lastError']}" if x.get("lastError") else ""))
+    if mode == "status":
+        return
+    for i in [i for i in ids if st.get(i, {}).get("status") == "not_sent"]:
+        r = telegram.submit(i)
+        log("재전송", i, r.get("ok"), r.get("result") or r.get("error", ""))
+    if mode != "bulk":
+        return
+    st = status()
+    todo = [i for i in ids if st.get(i, {}).get("status") in ("pending", "failed")]
+    log(f"일괄 업로드 대상 {len(todo)}개")
+    done, bad = [], []
+    for k in range(0, len(todo), 3):
+        r = telegram.worker("/cardnews/bulk", {"ids": todo[k:k + 3]}, timeout=300)
+        for x in r.get("items", []) or [{"id": i, "result": r.get("error")} for i in todo[k:k + 3]]:
+            log("업로드", x["id"], x.get("result"))
+    st = status()
+    for i in todo:
+        (done if st.get(i, {}).get("status") == "posted" else bad).append(i)
+    msg = f"카드뉴스 일괄 업로드: 성공 {len(done)}건 / 실패 {len(bad)}건"
+    for i in bad:
+        msg += f"\n- {i}: {st.get(i, {}).get('lastError') or st.get(i, {}).get('status')}"
+    log(msg)
+    telegram.send_text(msg[:3500])
+
+
 if __name__ == "__main__":
     cmd = sys.argv[1] if len(sys.argv) > 1 else ""
     try:
@@ -175,6 +210,8 @@ if __name__ == "__main__":
             generate()
         elif cmd == "notify":
             notify()
+        elif cmd == "admin":
+            admin(sys.argv[2], sys.argv[3])
         elif cmd == "prune":
             prune(sys.argv[2], sys.argv[3])
         else:
