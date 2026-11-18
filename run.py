@@ -96,7 +96,7 @@ def request(path):
     for n, req in enumerate(reqs):
         words = req["query"].split()
         issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
-                 "articles": collect.related(words, [], cands)[:3]}
+                 "articles": collect.related(words, [], cands)[:3], "facts": req.get("facts", [])}
         log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
         try:
             item = build_set(issue, f"{now:%y%m%dT%H%M}-{n}", cands)
@@ -108,7 +108,8 @@ def request(path):
             continue
         v = item["verify"]
         item["label"] = (f"[요청 {n + 1}/{len(reqs)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
-                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else ""))
+                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else "")
+                         + ("\n⚠️ 운영자 확인 사실 포함: " + " / ".join(issue["facts"]) if issue["facts"] else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         ids.append(item["id"])
         history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
@@ -136,6 +137,8 @@ def build_set(issue, set_id, pool=()):
         log(f"   검증 탈락(교차 확인): 보도한 언론사가 {len(publishers)}곳뿐")
         return None
     material = write.material_text(arts, [m["text"] for m in metas[:3]], [f"{t} ({src})" for t, src in cross])
+    if issue.get("facts"):          # 운영자가 직접 확인해 넣은 사실 (요청 제작 때만)
+        material += "\n\n[운영자 직접 확인 사실 — 기사와 같은 수준의 확인된 자료로 취급]\n" + "\n".join("- " + f for f in issue["facts"])
     draft = write.write_set(issue, material)
     if not draft:
         log("   자료 부족으로 건너뜀")
