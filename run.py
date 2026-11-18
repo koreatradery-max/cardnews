@@ -3,6 +3,7 @@
   python run.py generate          이슈 수집 → 문구 작성 → 썸네일 제작 (out/ 에 저장)
   python run.py notify            out/pending.json 의 세트를 텔레그램으로 승인 요청 → 10분 무응답 시 자동 승인
   python run.py prune DIR HOURS   DIR 안의 오래된 세트 파일 삭제 (이미지 보관 브랜치 정리용)
+  python run.py request FILE      FILE(JSON: topic, query, category) 주제로 세트 1개 제작
   python run.py admin DIR MODE    DIR(이미지 보관 브랜치) 의 세트 점검. MODE: status | resend | bulk | threads
                                    resend = 텔레그램에 못 간 세트 재전송, bulk = 재전송 후 아직 안 올라간 세트 일괄 업로드
 """
@@ -82,6 +83,33 @@ def generate():
     save_history(history)
     log(f"완료: {len(made)}세트")
     return made
+
+
+def request(path):
+    """요청 주제 1건으로 세트를 만든다 (requests/latest.json: {"topic", "query", "category"})."""
+    req = json.load(open(path, encoding="utf-8"))
+    now = datetime.now(config.KST)
+    os.makedirs(config.OUT_DIR, exist_ok=True)
+    cands, _ = collect.collect_candidates(log)
+    words = req["query"].split()
+    issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
+             "articles": collect.related(words, [], cands)[:3]}
+    log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
+    item = build_set(issue, f"{now:%y%m%dT%H%M}-r", cands)
+    ids = []
+    if item:
+        v = item["verify"]
+        item["label"] = (f"[요청] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
+                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else ""))
+        json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+        ids.append(item["id"])
+        history = load_history()
+        history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
+        save_history(history)
+    else:
+        telegram.send_text(f"요청 카드뉴스를 만들지 못했습니다: {issue['topic']}\n(보도 2곳 이상 확인 또는 AI 검수를 통과하지 못함)")
+    json.dump({"at": now.isoformat(), "ids": ids, "auto_min": 0},
+              open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
 
 
 def build_set(issue, set_id, pool=()):
@@ -217,6 +245,8 @@ if __name__ == "__main__":
             generate()
         elif cmd == "notify":
             notify()
+        elif cmd == "request":
+            request(sys.argv[2])
         elif cmd == "admin":
             admin(sys.argv[2], sys.argv[3])
         elif cmd == "prune":
@@ -225,7 +255,7 @@ if __name__ == "__main__":
             print(__doc__)
     except Exception as e:
         traceback.print_exc()
-        if cmd in ("generate", "notify"):
+        if cmd in ("generate", "notify", "request"):
             try:
                 telegram.send_text(f"카드뉴스 실행 오류 ({cmd}): {e}"[:900])
             except Exception:

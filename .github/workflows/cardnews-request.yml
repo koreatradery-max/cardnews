@@ -1,0 +1,82 @@
+name: 카드뉴스 요청 제작
+
+on:
+  push:
+    branches: [main]
+    paths: ['requests/latest.json']   # 이 파일을 올리면 해당 주제로 1세트 제작
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: cardnews
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      NAVER_CLIENT_ID: ${{ secrets.NAVER_CLIENT_ID }}          # 선택 (NAVER API HUB)
+      NAVER_CLIENT_SECRET: ${{ secrets.NAVER_CLIENT_SECRET }}  # 선택
+      CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
+      CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
+      CARDNEWS_MODEL: ${{ vars.CARDNEWS_MODEL }}
+      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '10' }}
+      CARDNEWS_AUTO_WINDOW: ${{ vars.CARDNEWS_AUTO_WINDOW || '8-12' }}   # 이 시간대(한국 시간)에 만든 세트만 자동 승인
+      TZ: Asia/Seoul
+    steps:
+      - name: 키 확인 (아직 등록 전이면 조용히 종료)
+        id: keys
+        run: |
+          if [ -n "$GEMINI_API_KEY" ] && [ -n "$CARDNEWS_KEY" ]; then
+            echo "ready=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::키가 아직 등록되지 않아 실행하지 않았습니다."
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.keys.outputs.ready == '1'
+      - uses: actions/setup-python@v5
+        if: steps.keys.outputs.ready == '1'
+        with:
+          python-version: '3.12'
+      - run: pip install -q pillow
+        if: steps.keys.outputs.ready == '1'
+
+      - name: 요청 주제로 문구 작성 · 썸네일 제작
+        if: steps.keys.outputs.ready == '1'
+        run: python run.py request requests/latest.json
+
+      - name: 다룬 이슈 기록 저장 (중복 제외용)
+        if: steps.keys.outputs.ready == '1'
+        run: |
+          git config user.name "cardnews-bot"
+          git config user.email "cardnews-bot@users.noreply.github.com"
+          git add data/history.json
+          git diff --cached --quiet || git commit -qm "cardnews: history $(date +%F\ %R)"
+          git pull -q --rebase && git push -q
+
+      - name: 이미지 보관 브랜치(media) 갱신 — 최근 3일치만 유지
+        if: steps.keys.outputs.ready == '1'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p _media
+          if git fetch -q --depth=1 origin media 2>/dev/null; then git archive FETCH_HEAD | tar -x -C _media; fi
+          python run.py prune _media 72
+          find out -maxdepth 1 \( -name '*.jpg' -o -name '*.json' \) ! -name 'pending.json' -exec cp {} _media/ \;
+          cd _media
+          git init -q -b media
+          git config user.name "cardnews-bot"
+          git config user.email "cardnews-bot@users.noreply.github.com"
+          git add -A
+          git commit -qm "media $(date +%F\ %R)" --allow-empty
+          git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" media
+          sleep 10
+
+      - name: 텔레그램 승인 요청 (요청 세트는 자동 승인 없음)
+        if: steps.keys.outputs.ready == '1'
+        run: python run.py notify
