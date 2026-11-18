@@ -44,7 +44,7 @@
 - 장기 토큰은 60일마다 갱신해야 합니다. 만료되면 텔레그램으로 안내가 옵니다.
 
 ## 실행
-- 자동: 한국 시간 0:07, 3:07, 6:07, 9:07, 12:07, 15:07, 18:07, 21:07
+- 자동: 한국 시간 0, 3, 6, 9, 12, 15, 18, 21시 정각에 Cloudflare Worker 가 실행을 호출 (Worker 변수 `GH_DISPATCH_TOKEN` 필요)
 - 수동: Actions → "카드뉴스 자동화" → Run workflow
 - 로컬 테스트(외부 호출 없이): `python -m tests.test_pipeline`, `node tests/test_worker.mjs`
 
