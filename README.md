@@ -14,7 +14,7 @@
    - 승인 → 인스타그램 API로 게시 → 완료 알림(게시물 링크)
    - 반려 → 폐기
    - 이전 사진 / 다음 사진 → 같은 문구로 사진 후보를 앞뒤로 넘겨 봄 (출처 표기도 함께 바뀜)
-   - 승인하지 않은 세트는 올라가지 않습니다. (자동 승인은 꺼져 있음)
+   - 8~12시 회차는 10분 안에 응답이 없으면 자동 승인됩니다. 그 밖의 시간에는 승인한 것만 올라갑니다. (저장소 변수 `CARDNEWS_AUTO_WINDOW`, `CARDNEWS_AUTO_MIN` 으로 변경)
 
 모두 무료 등급으로 동작합니다: GitHub Actions(공개 저장소), Gemini API 무료 등급, 언론사 RSS, Cloudflare Workers, 텔레그램, 인스타그램 API.
 
@@ -44,7 +44,7 @@
 - 장기 토큰은 60일마다 갱신해야 합니다. 만료되면 텔레그램으로 안내가 옵니다.
 
 ## 실행
-- 자동: 매 정각(1시간마다) Cloudflare Worker 가 실행을 호출 (Worker 변수 `GH_DISPATCH_TOKEN` 필요, 간격은 `CARDNEWS_EVERY_HOURS` 로 변경)
+- 자동: 한국 시간 8시~22시 매 정각 Cloudflare Worker 가 실행을 호출 (Worker 변수 `GH_DISPATCH_TOKEN` 필요. 운영 시간은 `CARDNEWS_START_HOUR`·`CARDNEWS_END_HOUR`, 간격은 `CARDNEWS_EVERY_HOURS` 로 변경)
 - 수동: Actions → "카드뉴스 자동화" → Run workflow
 - 로컬 테스트(외부 호출 없이): `python -m tests.test_pipeline`, `node tests/test_worker.mjs`
 

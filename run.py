@@ -71,10 +71,11 @@ def generate():
     for i, item in enumerate(made):
         v = item["verify"]
         item["label"] = (f"[{i + 1}/{len(made)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
-                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else ""))
+                         + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else "")
+                         + (f"\n⏱ {config.auto_minutes(now.hour):g}분 안에 응답이 없으면 자동 승인됩니다" if config.auto_minutes(now.hour) else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
-    json.dump({"at": now.isoformat(), "ids": [m["id"] for m in made]},
+    json.dump({"at": now.isoformat(), "ids": [m["id"] for m in made], "auto_min": config.auto_minutes(now.hour)},
               open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
     save_history(history)
     log(f"완료: {len(made)}세트")
@@ -128,7 +129,9 @@ def build_set(issue, set_id, pool=()):
 def notify():
     """승인 요청을 보내고, 정해진 시간 동안 응답이 없는 세트는 자동 승인한다."""
     p = os.path.join(config.OUT_DIR, "pending.json")
-    ids = json.load(open(p, encoding="utf-8")).get("ids", []) if os.path.exists(p) else []
+    pending = json.load(open(p, encoding="utf-8")) if os.path.exists(p) else {}
+    ids = pending.get("ids", [])
+    auto_min = float(pending.get("auto_min", 0))
     if not ids:
         telegram.send_text("카드뉴스: 이번 회차에는 올릴 만한 새 이슈를 만들지 못했습니다.")
         return
@@ -145,10 +148,10 @@ def notify():
             sent.append(sid)
     if not sent:
         raise RuntimeError("텔레그램 승인 요청을 하나도 보내지 못했습니다.")
-    if config.AUTO_APPROVE_MIN <= 0:
+    if auto_min <= 0:
         return
-    log(f"{config.AUTO_APPROVE_MIN:g}분 대기 후 응답 없는 세트 자동 승인")
-    time.sleep(config.AUTO_APPROVE_MIN * 60)
+    log(f"{auto_min:g}분 대기 후 응답 없는 세트 자동 승인")
+    time.sleep(auto_min * 60)
     for sid in sent:
         r = telegram.auto_approve(sid)
         log("자동 승인 확인", sid, r.get("result") or r.get("error"))

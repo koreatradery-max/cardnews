@@ -11,6 +11,7 @@ config.HISTORY = os.path.join(tmp, "history.json")
 config.GEMINI_KEY = config.WORKER_KEY = "x"
 config.WORKER_URL = "https://w.example"
 config.AUTO_APPROVE_MIN = 0.001
+config.AUTO_WINDOW = "0-23"
 
 TOPICS = [("올겨울 첫 한파특보 발효", "정치·사회", "한파특보 발효"), ("익명 기부자 1억원 전달", "기부·선행·감동", "익명 기부 1억원"),
           ("신인 그룹 데뷔 앨범 100만장", "연예", "신인 그룹 100만장"), ("지하철 요금 인상 확정", "정치·사회", "지하철 요금 인상"),
@@ -144,4 +145,6 @@ assert t["caption"].startswith("재밌잖아요 집행유예 선고\n\n서울")
 # 한 언론사만 보도한 이슈는 교차 확인에서 탈락
 write.llm = fake_llm; collect.http_get = fake_get; config.NAVER_ID = ""
 assert run.build_set({"topic": "t", "category": "연예", "query": "단독 보도", "articles": [{"title": "단독 보도", "link": "https://press.example/a/1", "source": "s", "desc": ""}]}, "261117T0000-7") is None
+config.AUTO_WINDOW, config.AUTO_APPROVE_MIN = "8-12", 10
+assert [config.auto_minutes(h) for h in (7, 8, 12, 13, 22)] == [0, 10, 10, 0, 0]
 print("ALL OK")

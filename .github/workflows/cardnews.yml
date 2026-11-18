@@ -1,7 +1,7 @@
 name: 카드뉴스 자동화
 
 on:
-  # 정시 실행은 Cloudflare Worker(tg-login)가 매 정각(기본 1시간마다) workflow_dispatch 로 호출한다.
+  # 정시 실행은 Cloudflare Worker(tg-login)가 한국 시간 8~22시 매 정각 workflow_dispatch 로 호출한다.
   # (GitHub 자체 예약은 늦거나 건너뛰는 일이 잦아 쓰지 않음)
   workflow_dispatch:           # Worker 호출 + Actions 화면에서 수동 실행
 
@@ -23,7 +23,8 @@ jobs:
       CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
       CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
       CARDNEWS_MODEL: ${{ vars.CARDNEWS_MODEL }}
-      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '0' }}
+      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '10' }}
+      CARDNEWS_AUTO_WINDOW: ${{ vars.CARDNEWS_AUTO_WINDOW || '8-12' }}   # 이 시간대(한국 시간)에 만든 세트만 자동 승인
       TZ: Asia/Seoul
     steps:
       - name: 키 확인 (아직 등록 전이면 조용히 종료)
@@ -75,6 +76,6 @@ jobs:
           git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" media
           sleep 10
 
-      - name: 텔레그램 승인 요청 (승인한 것만 업로드)
+      - name: 텔레그램 승인 요청 (8~12시 회차는 10분 무응답 시 자동 승인)
         if: steps.keys.outputs.ready == '1'
         run: python run.py notify
