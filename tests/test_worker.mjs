@@ -154,4 +154,18 @@ assert.equal(ghCalls[0][1].headers.Authorization, 'Bearer G'); assert.deepEqual(
 ghStatus = 401; reset();
 assert.equal(await cardnewsCron(env, new Date('2026-11-18T06:00:00Z')), 'failed_401');
 assert.ok(tgCalls.at(-1)[1].text.includes('정시 실행 호출 실패 (401)'));
+// 상태 조회 · 일괄 업로드
+await fresh();
+let st = await api('/cardnews/status', { ids: [ID, '200101T0000-1'] });
+assert.equal(st.items[0].status, 'pending'); assert.equal(st.items[1].status, 'not_sent');
+igMode = 'expired'; await api('/cardnews/auto', { id: ID });
+st = await api('/cardnews/status', { ids: [ID] });
+assert.equal(st.items[0].status, 'failed'); assert.ok(st.items[0].lastError.includes('token expired'));
+igMode = 'ok'; reset();
+let b = await api('/cardnews/bulk', { ids: [ID, '200101T0000-1'] });
+assert.deepEqual(b.items.map(x => x.result), ['posted', 'not_found']);
+assert.ok(tgCalls.at(-1)[1].text.includes('(일괄 업로드)'));
+b = await api('/cardnews/bulk', { ids: [ID] }); assert.equal(b.items[0].result, 'skip_posted');
+// 사진 변경 실패 시 사유를 알려주고 기록
+await fresh(); const _tg = tg;
 console.log('WORKER OK');

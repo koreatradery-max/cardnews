@@ -88,16 +88,17 @@ async function cnApprove(env, id, item, st, auto) {
   if (!lock.ok) return 'busy';
   await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'uploading' }, mask: true }]);
   const v = Math.min(Number(st.v || 0), item.variants.length - 1);
+  const tag = typeof auto === 'string' ? auto : '자동 승인';
   try {
     const post = await cnPublish(env, cnBase(env) + item.variants[v].file, cnCaption(item, v));
-    await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'posted', permalink: post.permalink, auto: !!auto, postedAt: Date.now() }, mask: true }]);
+    await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'posted', permalink: post.permalink, auto: !!auto, postedAt: Date.now(), lastError: '' }, mask: true }]);
     const th = await cnThreads(env, cnBase(env) + item.variants[v].file, item, v);
     const done = [[post.permalink && { text: '인스타그램 보기', url: post.permalink }, th && th.permalink && { text: '스레드 보기', url: th.permalink }].filter(Boolean)].filter(r => r.length);
-    await tg(env, 'editMessageCaption', { chat_id: st.chat, message_id: st.mid, caption: cnText(item, v, auto ? '✅ 자동 승인 · 업로드 완료' : '✅ 업로드 완료'), reply_markup: { inline_keyboard: done } });
-    await tg(env, 'sendMessage', { chat_id: st.chat, text: `✅ 인스타그램 업로드 완료${auto ? ' (자동 승인)' : ''}\n${(item.headline || []).join(' ')}${post.permalink ? '\n' + post.permalink : ''}${th ? (th.permalink ? '\n스레드: ' + th.permalink : (th.id ? '\n스레드 업로드 완료' : '\n⚠️ 스레드 업로드 실패: ' + th.error)) : ''}` });
+    await tg(env, 'editMessageCaption', { chat_id: st.chat, message_id: st.mid, caption: cnText(item, v, auto ? `✅ ${tag} · 업로드 완료` : '✅ 업로드 완료'), reply_markup: { inline_keyboard: done } });
+    await tg(env, 'sendMessage', { chat_id: st.chat, text: `✅ 인스타그램 업로드 완료${auto ? ` (${tag})` : ''}\n${(item.headline || []).join(' ')}${post.permalink ? '\n' + post.permalink : ''}${th ? (th.permalink ? '\n스레드: ' + th.permalink : (th.id ? '\n스레드 업로드 완료' : '\n⚠️ 스레드 업로드 실패: ' + th.error)) : ''}` });
     return 'posted';
   } catch (e) {
-    await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: auto ? 'failed' : 'pending' }, mask: true }]);
+    await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: auto ? 'failed' : 'pending', lastError: String(e.message || e).slice(0, 300) }, mask: true }]);
     await tg(env, 'editMessageReplyMarkup', { chat_id: st.chat, message_id: st.mid, reply_markup: cnKeyboard(id, v, item.variants.length) });
     const hint = e.code === 190 ? '\n인스타그램 토큰이 만료됐습니다. IG_ACCESS_TOKEN 을 갱신해 주세요.' : '';
     await tg(env, 'sendMessage', { chat_id: st.chat, text: `⚠️ 업로드 실패: ${e.message}${hint}\n승인 버튼을 다시 누르면 재시도합니다.` });
@@ -115,6 +116,7 @@ async function cardnewsApi(req, env, url) {
     const r = await tg(env, 'sendMessage', { chat_id: admin, text: String(body.text || '').slice(0, 3500) });
     return cnJson({ ok: !!r.ok });
   }
+  if (url.pathname === '/cardnews/status' || url.pathname === '/cardnews/bulk') return await cardnewsAdmin(env, url.pathname, body);
   const id = String(body.id || '');
   const item = await cnItem(env, id);
   if (!item) return cnJson({ ok: false, error: 'set_not_found' }, 404);
@@ -126,6 +128,35 @@ async function cardnewsApi(req, env, url) {
     await fsWrite(env, [{ path: `cardnews/${id}`, data: { status: 'pending', chat: String(admin), mid: r.result.message_id, v: 0, at: Date.now() } }]);
     return cnJson({ ok: true, result: 'sent' });
   }
+  return await cardnewsAutoRoute(env, url, id, item);
+}
+
+/* 관리용: 상태 조회 / 일괄 업로드.  POST /cardnews/status {ids[]} · /cardnews/bulk {ids[]} (한 번에 최대 3건) */
+async function cardnewsAdmin(env, path, body) {
+  const ids = (Array.isArray(body.ids) ? body.ids : []).map(String).filter(x => /^[0-9T-]+$/.test(x));
+  if (path === '/cardnews/status') {
+    const out = [];
+    for (const id of ids.slice(0, 40)) {
+      const st = await fsGet(env, `cardnews/${id}`);
+      out.push({ id, status: st ? st.status : 'not_sent', v: st ? st.v : null, lastError: st ? (st.lastError || '') : '', permalink: st ? (st.permalink || '') : '' });
+    }
+    return cnJson({ ok: true, items: out });
+  }
+  if (path === '/cardnews/bulk') {
+    const out = [];
+    for (const id of ids.slice(0, 3)) {
+      const item = await cnItem(env, id);
+      const st = item && await fsGet(env, `cardnews/${id}`);
+      if (!item || !st) { out.push({ id, result: 'not_found' }); continue; }
+      if (st.status !== 'pending' && st.status !== 'failed') { out.push({ id, result: 'skip_' + st.status }); continue; }
+      out.push({ id, result: await cnApprove(env, id, item, st, '일괄 업로드') });
+    }
+    return cnJson({ ok: true, items: out });
+  }
+  return null;
+}
+
+async function cardnewsAutoRoute(env, url, id, item) {
   if (url.pathname === '/cardnews/auto') {
     const st = await fsGet(env, `cardnews/${id}`);
     if (!st) return cnJson({ ok: false, error: 'not_sent' }, 404);
@@ -154,8 +185,8 @@ async function cardnewsCallback(env, cq) {
     const nv = (v + (act === 'pv' ? n - 1 : 1)) % n;
     const r = await cnTgPhoto(env, 'editMessageMedia', { chat_id: where.chat, message_id: where.mid,
       media: { type: 'photo', media: 'attach://card', caption: cnText(item, nv) }, reply_markup: cnKeyboard(id, nv, n) }, cnBase(env) + item.variants[nv].file);
-    if (r.ok) await fsWrite(env, [{ path: `cardnews/${id}`, data: { v: nv }, mask: true }]);
-    await answer(r.ok ? `사진 ${nv + 1}/${n}` : '사진을 바꾸지 못했습니다.');
+    await fsWrite(env, [{ path: `cardnews/${id}`, data: r.ok ? { v: nv } : { lastError: '사진 변경: ' + String(r.description || '').slice(0, 200) }, mask: true }]);
+    await answer(r.ok ? `사진 ${nv + 1}/${n}` : `사진을 바꾸지 못했습니다. ${r.description || ''}`.slice(0, 190), !r.ok);
     return ok;
   }
   if (act === 'no') {
