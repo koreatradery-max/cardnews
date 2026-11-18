@@ -22,6 +22,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - run: pip install -q pillow
       - run: |
           mkdir -p _media
           git fetch -q --depth=1 origin media && git archive FETCH_HEAD | tar -x -C _media
