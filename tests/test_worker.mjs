@@ -33,7 +33,9 @@ globalThis.fetch = async (url, init) => {
   if (url.endsWith('.json')) return { ok: url.includes(ID), json: async () => item };
   if (url.includes('graph.threads.net')) {
     const params = init && init.body ? Object.fromEntries(init.body) : null;
-    thCalls.push([url.split('?')[0], params]);
+    thCalls.push([url.split('?')[0], params || Object.fromEntries(new URL(url).searchParams)]);
+    if (url.includes('refresh_access_token')) return { status: 200, json: async () => thMode === 'refreshfail' ? { error: { message: 'expired' } } : { access_token: 'TH2', expires_in: 5184000 } };
+    if (url.includes('/me?')) return { json: async () => ({ id: '1', username: 'stock__pick' }) };
     if (thMode === 'fail' && url.endsWith('/threads')) return { json: async () => ({ error: { message: 'th down' } }) };
     if (url.endsWith('/threads')) return { json: async () => ({ id: 'TBOX' }) };
     if (url.endsWith('/threads_publish')) return { json: async () => ({ id: 'TPOST' }) };
@@ -168,4 +170,21 @@ assert.ok(tgCalls.at(-1)[1].text.includes('(일괄 업로드)'));
 b = await api('/cardnews/bulk', { ids: [ID] }); assert.equal(b.items[0].result, 'skip_posted');
 // 사진 변경 실패 시 사유를 알려주고 기록
 await fresh(); const _tg = tg;
+// 스레드 토큰 연장: 새벽 4시 점검 → Firestore 저장 → 이후 게시에 새 토큰 사용, 7일 안엔 다시 연장 안 함
+env.THREADS_ACCESS_TOKEN = 'TH-ORIGINAL-123456'; thCalls = []; db = {};
+await cardnewsCron(env, new Date('2026-11-18T19:00:00Z'));            // KST 04:00
+assert.equal(db['cardnews/_threads'].token, 'TH2');
+thCalls = []; await cardnewsCron(env, new Date('2026-11-19T19:00:00Z'));
+assert.equal(thCalls.filter(c => c[0].includes('refresh')).length, 0);
+let t = await api('/cardnews/threads', {});
+assert.equal(t.ok, true); assert.equal(t.username, 'stock__pick'); assert.equal(t.refresh, 'refreshed');
+{ const keep = db['cardnews/_threads']; await fresh(); db['cardnews/_threads'] = keep; } thCalls = []; await api('/cardnews/auto', { id: ID });
+assert.equal(thCalls.find(c => c[0].endsWith('/threads'))[1].access_token, 'TH2');
+// Cloudflare 토큰을 새로 바꾸면 새 토큰 우선
+env.THREADS_ACCESS_TOKEN = 'TH-NEW-abcdefghijkl'; await fresh(); thCalls = []; await api('/cardnews/auto', { id: ID });
+assert.equal(thCalls.find(c => c[0].endsWith('/threads'))[1].access_token, 'TH-NEW-abcdefghijkl');
+// 연장 실패 시 텔레그램 알림
+thMode = 'refreshfail'; reset(); t = await api('/cardnews/threads', {});
+assert.equal(t.refresh, 'failed'); assert.ok(tgCalls.at(-1)[1].text.includes('스레드 토큰 연장 실패'));
+thMode = 'ok'; delete env.THREADS_ACCESS_TOKEN;
 console.log('WORKER OK');

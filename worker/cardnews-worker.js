@@ -117,6 +117,12 @@ async function cardnewsApi(req, env, url) {
     return cnJson({ ok: !!r.ok });
   }
   if (url.pathname === '/cardnews/status' || url.pathname === '/cardnews/bulk') return await cardnewsAdmin(env, url.pathname, body);
+  if (url.pathname === '/cardnews/threads') {          // 스레드 연결 점검 + 토큰 연장
+    if (!env.THREADS_ACCESS_TOKEN) return cnJson({ ok: false, error: 'THREADS_ACCESS_TOKEN 없음' });
+    const refresh = await cnThreadsRefresh(env, true);
+    const me = await fetch(`https://graph.threads.net/v1.0/me?fields=id,username&access_token=${encodeURIComponent(await cnThreadsToken(env))}`).then(r => r.json()).catch(e => ({ error: { message: e.message } }));
+    return cnJson({ ok: !!me.username, refresh, username: me.username || '', error: me.error && me.error.message || '' });
+  }
   const id = String(body.id || '');
   const item = await cnItem(env, id);
   if (!item) return cnJson({ ok: false, error: 'set_not_found' }, 404);
@@ -206,10 +212,40 @@ async function cardnewsCallback(env, cq) {
 }
 
 /* 스레드 동시 게시 (THREADS_ACCESS_TOKEN 이 있을 때만). 반환: null | { id, permalink } | { error } — 실패해도 인스타그램 게시에는 영향 없음 */
+/* 스레드 토큰은 60일이면 만료되므로 Worker 가 주기적으로 연장해 Firestore 에 보관한다.
+   Cloudflare 의 THREADS_ACCESS_TOKEN 을 새로 넣으면(끝 12자리가 바뀌면) 그 토큰을 우선 쓴다. */
+async function cnThreadsToken(env) {
+  if (!env.THREADS_ACCESS_TOKEN) return '';
+  const src = env.THREADS_ACCESS_TOKEN.slice(-12);
+  const saved = await fsGet(env, 'cardnews/_threads').catch(() => null);
+  return saved && saved.src === src && saved.token ? saved.token : env.THREADS_ACCESS_TOKEN;
+}
+
+async function cnThreadsRefresh(env, force) {
+  if (!env.THREADS_ACCESS_TOKEN) return 'no_token';
+  const src = env.THREADS_ACCESS_TOKEN.slice(-12);
+  const saved = await fsGet(env, 'cardnews/_threads').catch(() => null);
+  const fresh = saved && saved.src === src && saved.token;
+  if (!force && fresh && Date.now() - Number(saved.refreshedAt || 0) < 7 * 864e5) return 'fresh';
+  const token = fresh ? saved.token : env.THREADS_ACCESS_TOKEN;
+  const r = await fetch(`https://graph.threads.net/refresh_access_token?grant_type=th_refresh_token&access_token=${encodeURIComponent(token)}`);
+  const j = await r.json().catch(() => ({}));
+  if (!j.access_token) {
+    const admin = adminIds(env)[0];
+    const msg = (j.error && j.error.message) || ('HTTP ' + r.status);
+    if (admin && (!saved || saved.lastError !== msg)) await tg(env, 'sendMessage', { chat_id: admin, text: `⚠️ 스레드 토큰 연장 실패: ${msg}\n토큰이 만료됐다면 Meta 에서 새로 발급해 THREADS_ACCESS_TOKEN 을 바꿔 주세요.` });
+    await fsWrite(env, [{ path: 'cardnews/_threads', data: { lastError: msg }, mask: true }]);
+    return 'failed';
+  }
+  await fsWrite(env, [{ path: 'cardnews/_threads', data: { src, token: j.access_token, refreshedAt: Date.now(), expiresIn: Number(j.expires_in || 0), lastError: '' } }]);
+  return 'refreshed';
+}
+
 async function cnThreads(env, imageUrl, item, v) {
   if (!env.THREADS_ACCESS_TOKEN) return null;
+  const token = await cnThreadsToken(env);
   const call = async (path, params, method) => {
-    const body = new URLSearchParams({ ...params, access_token: env.THREADS_ACCESS_TOKEN });
+    const body = new URLSearchParams({ ...params, access_token: token });
     const res = method === 'GET'
       ? await fetch(`https://graph.threads.net/v1.0/${path}?${body}`)
       : await fetch(`https://graph.threads.net/v1.0/${path}`, { method: 'POST', body });
@@ -241,8 +277,9 @@ async function cnThreads(env, imageUrl, item, v) {
 
 /* 정시 실행: Worker 의 1분 크론에서 호출. 한국 시간 8시~22시 매 정각(CARDNEWS_EVERY_HOURS 시간마다, 기본 1시간)에 GitHub Actions 를 실행시킨다 */
 async function cardnewsCron(env, now) {
-  if (!env.GH_DISPATCH_TOKEN) return 'no_token';
   const d = now || new Date();
+  if (env.THREADS_ACCESS_TOKEN && (d.getUTCHours() + 9) % 24 === 4) await cnThreadsRefresh(env).catch(e => console.error('threads refresh', e));  // 매일 새벽 4시 점검
+  if (!env.GH_DISPATCH_TOKEN) return 'no_token';
   const every = Math.max(1, Number(env.CARDNEWS_EVERY_HOURS || 1));        // 몇 시간마다 실행할지 (기본 1시간)
   const kst = (d.getUTCHours() + 9) % 24;
   const start = Number(env.CARDNEWS_START_HOUR || 8), end = Number(env.CARDNEWS_END_HOUR || 22);   // 한국 시간 8시~22시만 실행
