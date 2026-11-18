@@ -7,6 +7,9 @@
  * (2) tgWebhook 안, `const update = await req.json().catch(() => ({}));` 바로 다음 줄에 추가
  *       if (update.callback_query) return cardnewsCallback(env, update.callback_query);
  *
+ * (4) scheduled 안, 기존 briefingCron 줄 바로 아래에 추가
+ *       ctx.waitUntil(cardnewsCron(env).catch(e => console.error('cardnews cron', e)));
+ *
  * (3) setup 안의 allowed_updates 를 ['message'] → ['message', 'callback_query'] 로 변경
  *     배포 후 https://<worker 주소>/setup?key=<WEBHOOK_SECRET> 을 한 번 열어 웹훅을 다시 등록
  *
@@ -16,6 +19,7 @@
  *   IG_USER_ID       (Text)    인스타그램 프로페셔널 계정 ID (숫자)
  *   IG_ACCESS_TOKEN  (Secret)  인스타그램 사용자 액세스 토큰 (장기 토큰, 60일마다 갱신)
  *   IG_GRAPH_HOST    (Text, 선택) 기본 graph.instagram.com (Facebook 로그인 토큰이면 graph.facebook.com)
+ *   GH_DISPATCH_TOKEN (Secret) GitHub 토큰(cardnews 저장소 Actions 읽기·쓰기). 넣으면 Worker 가 정시(한국 0·3·6·…·21시)에 실행을 호출
  *   THREADS_ACCESS_TOKEN (Secret, 선택) 스레드 사용자 액세스 토큰. 넣으면 인스타그램 게시 후 스레드에도 같은 사진·글을 올림
  *
  * [상태 저장] Firestore cardnews/{세트ID}: { status: pending|uploading|posted|rejected, chat, mid, v, at }
@@ -198,4 +202,23 @@ async function cnThreads(env, imageUrl, item, v) {
   } catch (e) {
     return { error: e.message };
   }
+}
+
+/* 정시 실행: Worker 의 1분 크론에서 호출. 한국 시간 0·3·6·9·12·15·18·21시 정각에 GitHub Actions 를 실행시킨다 */
+async function cardnewsCron(env, now) {
+  if (!env.GH_DISPATCH_TOKEN) return 'no_token';
+  const d = now || new Date();
+  if (d.getUTCMinutes() !== 0 || d.getUTCHours() % 3 !== 0) return 'skip';
+  const repo = env.CARDNEWS_REPO || 'koreatradery-max/cardnews';
+  const r = await fetch(`https://api.github.com/repos/${repo}/actions/workflows/cardnews.yml/dispatches`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${env.GH_DISPATCH_TOKEN}`, Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'cardnews-worker', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: 'main' }),
+  });
+  if (r.status === 204) return 'dispatched';
+  const detail = (await r.text().catch(() => '')).slice(0, 200);
+  const admin = adminIds(env)[0];
+  if (admin) await tg(env, 'sendMessage', { chat_id: admin, text: `⚠️ 카드뉴스 정시 실행 호출 실패 (${r.status})\n${detail}${r.status === 401 ? '\nGH_DISPATCH_TOKEN 이 만료됐거나 잘못됐습니다.' : ''}` });
+  return 'failed_' + r.status;
 }

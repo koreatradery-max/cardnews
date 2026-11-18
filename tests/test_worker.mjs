@@ -5,6 +5,7 @@ const src = fs.readFileSync(new URL('../worker/cardnews-worker.js', import.meta.
 const ID = '261117T1507-1';
 const item = { id: ID, label: '[1/3] 연예', caption: '제목\n\n본문입니다.', cta: '팔로우', headline: ['줄1', '줄2'],
   variants: [{ file: ID + '_0.jpg', credit: 'A일보' }, { file: ID + '_1.jpg', credit: 'B뉴스' }] };
+let ghCalls = [], ghStatus = 204;
 let tgCalls = [], igCalls = [], thCalls = [], thMode = 'ok', igMode = 'ok', markup = null, db = {};
 globalThis.setTimeout = (f) => f();
 const tg = async (env, method, p) => {
@@ -27,6 +28,7 @@ globalThis.fetch = async (url, init) => {
     p._file = init.body.get('photo') ? 'photo' : (init.body.get('card') ? 'card' : null);
     return { json: async () => tg(env, method, p) };
   }
+  if (url.includes('api.github.com')) { ghCalls.push([url, init]); return { status: ghStatus, text: async () => 'bad creds' }; }
   if (url.endsWith('.jpg')) return { ok: true, blob: async () => new Blob(['jpg']) };
   if (url.endsWith('.json')) return { ok: url.includes(ID), json: async () => item };
   if (url.includes('graph.threads.net')) {
@@ -44,8 +46,8 @@ globalThis.fetch = async (url, init) => {
   return { json: async () => ({ permalink: 'https://www.instagram.com/p/xyz/' }) };
 };
 class Res { constructor(b, o) { this.body = b; this.status = (o && o.status) || 200; } }
-const mod = new Function('tg', 'adminIds', 'fsGet', 'fsWrite', 'Response', src + '\nreturn { cardnewsCallback, cardnewsApi, cnText };');
-const { cardnewsCallback, cardnewsApi, cnText } = mod(tg, () => ['111'], fsGet, fsWrite, Res);
+const mod = new Function('tg', 'adminIds', 'fsGet', 'fsWrite', 'Response', src + '\nreturn { cardnewsCallback, cardnewsApi, cnText, cardnewsCron };');
+const { cardnewsCallback, cardnewsApi, cnText, cardnewsCron } = mod(tg, () => ['111'], fsGet, fsWrite, Res);
 const env = { BOT_TOKEN: 'B', IG_USER_ID: '999', IG_ACCESS_TOKEN: 'TOK', CARDNEWS_BASE: 'https://raw.example/media', CARDNEWS_KEY: 'K' };
 const api = async (path, body, key = 'K') => { const r = await cardnewsApi({ headers: { get: () => key }, json: async () => body }, env, { pathname: path }); return { status: r.status, ...JSON.parse(r.body) }; };
 const cq = (data, from = 111) => ({ id: 'c1', data, from: { id: from }, message: { chat: { id: 111 }, message_id: 7 } });
@@ -133,4 +135,15 @@ item.caption = '제목\n\n본문입니다.'; delete env.THREADS_ACCESS_TOKEN;
 // 오류 알림
 reset(); await api('/cardnews/notice', { text: '오류' }); assert.equal(tgCalls[0][1].text, '오류');
 assert.equal(cnText(item, 0), '[1/3] 연예\n\n제목\n\n본문입니다.\n\n📸 A일보\n팔로우');
+// 정시 실행 호출
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T03:00:30Z')), 'no_token');
+env.GH_DISPATCH_TOKEN = 'G';
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T03:01:00Z')), 'skip');      // 정각 아님
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T04:00:00Z')), 'skip');      // 3시간 단위 아님
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T15:00:10Z')), 'dispatched'); // 한국 0시
+assert.equal(ghCalls[0][0], 'https://api.github.com/repos/koreatradery-max/cardnews/actions/workflows/cardnews.yml/dispatches');
+assert.equal(ghCalls[0][1].headers.Authorization, 'Bearer G'); assert.deepEqual(JSON.parse(ghCalls[0][1].body), { ref: 'main' });
+ghStatus = 401; reset();
+assert.equal(await cardnewsCron(env, new Date('2026-11-18T06:00:00Z')), 'failed_401');
+assert.ok(tgCalls.at(-1)[1].text.includes('정시 실행 호출 실패 (401)'));
 console.log('WORKER OK');
