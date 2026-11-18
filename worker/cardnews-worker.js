@@ -7,8 +7,12 @@
  * (2) tgWebhook 안, `const update = await req.json().catch(() => ({}));` 바로 다음 줄에 추가
  *       if (update.callback_query) return cardnewsCallback(env, update.callback_query);
  *
- * (4) scheduled 안, 기존 briefingCron 줄 바로 아래에 추가
- *       ctx.waitUntil(cardnewsCron(env).catch(e => console.error('cardnews cron', e)));
+ * (4) scheduled 를 아래처럼 바꾸고, Settings → Trigger events 에 크론 `0 * * * *` 추가
+ *       async scheduled(event, env, ctx) {
+ *         if (event.cron === '0 * * * *') { ctx.waitUntil(cardnewsCron(env, new Date(event.scheduledTime)).catch(e => console.error('cardnews cron', e))); return; }
+ *         ctx.waitUntil(briefingCron(env).catch(e => console.error('briefing cron', e)));
+ *       }
+ *     (시황 크론은 정해진 몇 분만 돌기 때문에 카드뉴스용 매시 정각 크론을 따로 둔다. 시황 함수가 카드뉴스 크론에 끌려 실행되지 않도록 크론 문자열로 나눈다)
  *
  * (3) setup 안의 allowed_updates 를 ['message'] → ['message', 'callback_query'] 로 변경
  *     배포 후 https://<worker 주소>/setup?key=<WEBHOOK_SECRET> 을 한 번 열어 웹훅을 다시 등록
