@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'status=상태 확인 / resend=텔레그램 미전송 세트 재전송 / bulk=재전송 + 아직 안 올라간 세트 일괄 업로드(반려 제외)'
+        description: 'status=상태 확인 / resend=텔레그램 미전송 세트 재전송 / bulk=재전송 + 아직 안 올라간 세트 일괄 업로드(반려 제외) / threads=스레드 연결 점검'
         type: choice
-        options: [status, resend, bulk]
+        options: [status, resend, bulk, threads]
         default: status
 
 jobs:

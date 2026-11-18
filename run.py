@@ -3,7 +3,7 @@
   python run.py generate          이슈 수집 → 문구 작성 → 썸네일 제작 (out/ 에 저장)
   python run.py notify            out/pending.json 의 세트를 텔레그램으로 승인 요청 → 10분 무응답 시 자동 승인
   python run.py prune DIR HOURS   DIR 안의 오래된 세트 파일 삭제 (이미지 보관 브랜치 정리용)
-  python run.py admin DIR MODE    DIR(이미지 보관 브랜치) 의 세트 점검. MODE: status | resend | bulk
+  python run.py admin DIR MODE    DIR(이미지 보관 브랜치) 의 세트 점검. MODE: status | resend | bulk | threads
                                    resend = 텔레그램에 못 간 세트 재전송, bulk = 재전송 후 아직 안 올라간 세트 일괄 업로드
 """
 import json, os, re, sys, time, traceback
@@ -171,6 +171,13 @@ def prune(folder, hours):
 
 
 def admin(folder, mode):
+    if mode == "threads":
+        r = telegram.worker("/cardnews/threads", {})
+        log("스레드 연결:", r)
+        telegram.send_text(f"스레드 연결 점검: {'정상 @' + r.get('username', '') if r.get('ok') else '실패 ' + str(r.get('error'))}")
+        if not r.get("ok"):
+            raise RuntimeError(r.get("error"))
+        return
     ids = sorted({m.group(1) for n in os.listdir(folder) if (m := re.match(r"(\d{6}T\d{4}-\d+)\.json$", n))})
     log(f"세트 {len(ids)}개")
     status = lambda: {x["id"]: x for x in telegram.worker("/cardnews/status", {"ids": ids}).get("items", [])}
