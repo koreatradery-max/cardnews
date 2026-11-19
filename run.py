@@ -91,9 +91,27 @@ def request(path):
     reqs = reqs if isinstance(reqs, list) else [reqs]
     now = datetime.now(config.KST)
     os.makedirs(config.OUT_DIR, exist_ok=True)
-    cands, _ = collect.collect_candidates(log)
+    cands = collect.collect_candidates(log)[0] if any(not r.get("reuse") for r in reqs) else []
     history, ids = load_history(), []
     for n, req in enumerate(reqs):
+        if req.get("reuse"):             # 이미 만든 세트를 사진만 골라 다시 보내기 {"reuse": ID, "keep": [사진 번호]}
+            import urllib.request
+            base = "https://raw.githubusercontent.com/koreatradery-max/cardnews/media/"
+            old = json.loads(urllib.request.urlopen(base + req["reuse"] + ".json", timeout=30).read())
+            new_id = f"{now:%y%m%dT%H%M}-{n}"
+            keep = [old["variants"][k] for k in req.get("keep", range(len(old["variants"])))]
+            for k, v in enumerate(keep):
+                f = f"{new_id}_{k}.jpg"
+                open(os.path.join(config.OUT_DIR, f), "wb").write(urllib.request.urlopen(base + v["file"], timeout=30).read())
+                keep[k] = {**v, "file": f}
+            item = {**old, "id": new_id, "variants": keep}
+            if req.get("caption"):
+                item["caption"] = req["caption"]
+            item["label"] = old.get("label", "").replace("[요청", "[요청·사진 변경", 1)
+            json.dump(item, open(os.path.join(config.OUT_DIR, new_id + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+            ids.append(new_id)
+            log(f"재사용: {req['reuse']} → {new_id} (사진 {len(keep)}장)")
+            continue
         words = req["query"].split()
         issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
                  "articles": collect.related(words, [], cands)[:3], "facts": req.get("facts", [])}
