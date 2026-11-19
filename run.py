@@ -96,8 +96,13 @@ def request(path):
     expanded = []
     for req in reqs:                     # {"auto": N} → 지금 이슈 N개를 평소처럼 자동 선별
         if req.get("auto"):
-            picks = write.select_issues(cands, trends, [h["topic"] for h in history], int(req["auto"]) + 5)
-            picks = [p for p in picks if not is_duplicate(p, history)]
+            try:
+                picks = write.select_issues(cands, trends, [h["topic"] for h in history], int(req["auto"]) + 5)
+                picks = [p for p in picks if not is_duplicate(p, history)]
+            except Exception as e:
+                log(f"자동 선별 실패: {e}")
+                telegram.send_text(f"자동 이슈 선별에 실패했습니다: {str(e)[:300]}")
+                picks = []
             expanded.append({"_auto": picks, "_want": int(req["auto"])})
         else:
             expanded.append(req)
