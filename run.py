@@ -168,6 +168,12 @@ def request(path):
               open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
 
 
+DEATH = re.compile(r"숨진|숨져|사망|심정지|극단|변사|시신")
+BAN = re.compile(r"모텔|숙박업소|로프|끈|투신|목숨|유서|수험표|극단적|충격|결국")
+HELPLINE = ("우울감 등 말하기 어려운 고민이 있거나 주변에 이런 어려움을 겪는 가족·지인이 있을 경우 자살예방 상담전화 ☎109 "
+            "또는 SNS상담 마들랜(마음을 들어주는 랜선친구)에서 24시간 전문가의 상담을 받을 수 있습니다.")
+
+
 def build_set(issue, set_id, pool=()):
     log(f"3) 작성: {issue['topic']}")
     words = issue["query"].split()
@@ -197,6 +203,17 @@ def build_set(issue, set_id, pool=()):
     text, fixed = write.double_check(draft, material, log)
     if not text:
         return None
+    if DEATH.search(" ".join(text["headline"]) + text["caption"]):   # 사망 관련: 자살보도 권고기준
+        if BAN.search(" ".join(text["headline"])):
+            log("   제외(사망 보도 기준): 제목에 장소·방법·자극적 표현")
+            return None
+        paras = []
+        for para in text["caption"].split("\n\n"):
+            keep = " ".join(x for x in re.split(r"(?<=\.)\s+", para.strip()) if not BAN.search(x))
+            if keep:
+                paras.append(keep)
+        text["caption"] = "\n\n".join(paras)
+        text["caption"] = text["caption"].rstrip() + "\n\n" + HELPLINE
     imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS + 2, log)
     checked = []
     for img, credit in imgs:                     # 검증 ③: 사진이 기사 내용과 맞는지 (다른 인물·다른 행사 사진 제외)
