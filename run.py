@@ -91,9 +91,27 @@ def request(path):
     reqs = reqs if isinstance(reqs, list) else [reqs]
     now = datetime.now(config.KST)
     os.makedirs(config.OUT_DIR, exist_ok=True)
-    cands = collect.collect_candidates(log)[0] if any(not r.get("reuse") for r in reqs) else []
+    cands, trends = collect.collect_candidates(log) if any(not r.get("reuse") for r in reqs) else ([], [])
     history, ids = load_history(), []
+    expanded = []
+    for req in reqs:                     # {"auto": N} → 지금 이슈 N개를 평소처럼 자동 선별
+        if req.get("auto"):
+            picks = write.select_issues(cands, trends, [h["topic"] for h in history], int(req["auto"]) + 5)
+            picks = [p for p in picks if not is_duplicate(p, history)]
+            expanded.append({"_auto": picks, "_want": int(req["auto"])})
+        else:
+            expanded.append(req)
+    reqs = []
+    for req in expanded:
+        if "_auto" in req:
+            reqs += [{"topic": p["topic"], "query": p["query"], "category": p.get("category", "대형 이슈·속보"),
+                      "_issue": p, "_group": id(req), "_want": req["_want"]} for p in req["_auto"]]
+        else:
+            reqs.append(req)
+    made_in = {}
     for n, req in enumerate(reqs):
+        if "_group" in req and made_in.get(req["_group"], 0) >= req["_want"]:
+            continue
         if req.get("reuse"):             # 이미 만든 세트를 사진만 골라 다시 보내기 {"reuse": ID, "keep": [사진 번호]}
             import urllib.request
             base = "https://raw.githubusercontent.com/koreatradery-max/cardnews/media/"
@@ -113,8 +131,10 @@ def request(path):
             log(f"재사용: {req['reuse']} → {new_id} (사진 {len(keep)}장)")
             continue
         words = req["query"].split()
-        issue = {"topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
-                 "articles": collect.related(words, [], cands)[:3], "facts": req.get("facts", [])}
+        issue = req["_issue"] if "_issue" in req else {
+                 "topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
+                 "articles": collect.related(words, [], cands)[:3]}
+        issue["facts"] = req.get("facts", [])
         log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
         try:
             item = build_set(issue, f"{now:%y%m%dT%H%M}-{n}", cands)
@@ -129,15 +149,19 @@ def request(path):
                 item = None
         if item and req.get("append"):   # 설명글 끝에 고정 문구 추가 (예: 상담 전화 안내)
             item["caption"] = item["caption"].rstrip() + "\n\n" + req["append"]
+        if not item and "_group" in req:
+            continue
         if not item:
             telegram.send_text(f"요청 카드뉴스를 만들지 못했습니다: {issue['topic']}\n(보도 2곳 이상 확인 또는 AI 검수를 통과하지 못함)")
             continue
         v = item["verify"]
-        item["label"] = (f"[요청 {n + 1}/{len(reqs)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
+        item["label"] = (f"[요청 {len(ids) + 1}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
                          + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else "")
                          + ("\n⚠️ 운영자 확인 사실 포함: " + " / ".join(issue["facts"]) if issue["facts"] else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
         ids.append(item["id"])
+        if "_group" in req:
+            made_in[req["_group"]] = made_in.get(req["_group"], 0) + 1
         history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
     save_history(history)
     json.dump({"at": now.isoformat(), "ids": ids, "auto_min": 0},
