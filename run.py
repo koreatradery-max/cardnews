@@ -103,6 +103,14 @@ def request(path):
         except Exception as e:
             log(f"   실패: {e}")
             item = None
+        if item and req.get("ban"):      # 넣으면 안 되는 표현(방법·장소 등)이 들어가면 버린다
+            body = " ".join(item["headline"]) + item["caption"]
+            hit = [w for w in req["ban"] if w in body]
+            if hit:
+                log(f"   금지 표현 포함으로 폐기: {hit}")
+                item = None
+        if item and req.get("append"):   # 설명글 끝에 고정 문구 추가 (예: 상담 전화 안내)
+            item["caption"] = item["caption"].rstrip() + "\n\n" + req["append"]
         if not item:
             telegram.send_text(f"요청 카드뉴스를 만들지 못했습니다: {issue['topic']}\n(보도 2곳 이상 확인 또는 AI 검수를 통과하지 못함)")
             continue
