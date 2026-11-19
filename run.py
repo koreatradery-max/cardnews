@@ -173,7 +173,15 @@ def build_set(issue, set_id, pool=()):
     text, fixed = write.double_check(draft, material, log)
     if not text:
         return None
-    imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS, log)
+    imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS + 2, log)
+    checked = []
+    for img, credit in imgs:                     # 검증 ③: 사진이 기사 내용과 맞는지 (다른 인물·다른 행사 사진 제외)
+        ok, why = write.photo_ok(img, text["headline"], text["caption"])
+        if ok:
+            checked.append((img, credit))
+        else:
+            log(f"   사진 제외({credit}): {why}")
+    imgs = checked[:config.VARIANTS]
     variants = []
     if not imgs:
         log("   쓸 수 있는 사진이 없어 기본 배경 사용")

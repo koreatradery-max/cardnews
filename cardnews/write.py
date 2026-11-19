@@ -34,11 +34,15 @@ def model_order():
     return _models
 
 
-def llm(system, user, max_tokens=4096):
+def llm(system, user, max_tokens=4096, image_jpeg=None):
     if not config.GEMINI_KEY:
         raise RuntimeError("GEMINI_API_KEY 가 설정되지 않았습니다.")
+    parts = [{"text": user}]
+    if image_jpeg:
+        import base64
+        parts.insert(0, {"inline_data": {"mime_type": "image/jpeg", "data": base64.b64encode(image_jpeg).decode()}})
     body = {"system_instruction": {"parts": [{"text": system}]},
-            "contents": [{"role": "user", "parts": [{"text": user}]}],
+            "contents": [{"role": "user", "parts": parts}],
             "generationConfig": {"temperature": 0.6, "maxOutputTokens": max_tokens, "responseMimeType": "application/json"}}
     last = None
     for model in list(model_order()):
@@ -186,3 +190,24 @@ def double_check(draft, material, log=print):
         log(f"   검증 탈락(자료에 없는 숫자): {missing}")
         return None, removed + ["숫자 " + ", ".join(missing)]
     return fixed, removed
+
+
+PHOTO_SYS = """너는 뉴스 사진 편집자다. 카드뉴스 기사와 사진이 맞는지 판정한다.
+- 사진의 주인공이 기사에 나오지 않는 다른 인물(예: 기사는 캐나다 총리 회동인데 사진은 프랑스 대통령과 악수)이면 맞지 않음.
+- 기사와 다른 행사·장소·사건 장면이 분명하면 맞지 않음.
+- 기사 속 인물 단독 사진, 관련 장소·자료 사진, 상징적 사진처럼 기사와 어긋나지 않으면 맞음.
+JSON 으로만 답한다: {"ok": true 또는 false, "why": "한 줄 이유"}"""
+
+
+def photo_ok(img, headline, caption):
+    """사진이 기사 내용과 맞는지 AI 로 확인. 판정 실패 시에는 통과시킨다."""
+    import io
+    buf = io.BytesIO()
+    im = img.convert("RGB")
+    im.thumbnail((768, 768))
+    im.save(buf, "JPEG", quality=85)
+    try:
+        r = parse_json(llm(PHOTO_SYS, "[제목]\n" + " / ".join(headline) + "\n\n[본문]\n" + caption[:800], 300, buf.getvalue()))
+        return bool(r.get("ok", True)), str(r.get("why", ""))
+    except Exception as e:
+        return True, f"판정 실패 {e}"
