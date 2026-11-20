@@ -75,6 +75,7 @@ def generate():
         v = item["verify"]
         item["label"] = (f"[{i + 1}/{len(made)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
                          + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else "")
+                         + ("\n⚠️ 민감 주제: 묘사 표현 자동 제거됨, 자동 승인 제외" if item.get("sensitive") else "")
                          + (f"\n⏱ {config.auto_minutes(now.hour):g}분 안에 응답이 없으면 자동 승인됩니다" if config.auto_minutes(now.hour) else ""))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
@@ -173,8 +174,11 @@ def request(path):
               open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
 
 
-DEATH = re.compile(r"숨진|숨져|사망|심정지|극단|변사|시신")
-BAN = re.compile(r"모텔|숙박업소|로프|끈|투신|목숨|유서|수험표|극단적|충격|결국")
+# 인스타그램·스레드 커뮤니티 규정(자살·자해·섭식장애, 폭력·선정적 묘사) 대응
+SENSITIVE = re.compile(r"숨진|숨져|숨지|사망|심정지|극단|변사|시신|살해|살인|폭행|흉기|자해|섭식|거식|폭식|학대")
+CRIME = re.compile(r"살해|살인|폭행|혐의|구속|체포|기소|송치|범행")
+BAN = re.compile(r"목을 졸|목 졸|졸라|졸려|찔러|찔린|흉기|둔기|휘둘|매달|목을 매|투신|뛰어내|번개탄|과다 ?복용|약물을 먹|불을 질러|분신|"
+                 r"손목|자해|구토|굶|체중 ?감량|모텔|숙박업소|로프|끈으로|유서|수험표|극단적|충격|결국|잔혹|참혹|토막|피투성이|처참")
 HELPLINE = ("우울감 등 말하기 어려운 고민이 있거나 주변에 이런 어려움을 겪는 가족·지인이 있을 경우 자살예방 상담전화 ☎109 "
             "또는 SNS상담 마들랜(마음을 들어주는 랜선친구)에서 24시간 전문가의 상담을 받을 수 있습니다.")
 
@@ -208,17 +212,23 @@ def build_set(issue, set_id, pool=()):
     text, fixed = write.double_check(draft, material, log)
     if not text:
         return None
-    if DEATH.search(" ".join(text["headline"]) + text["caption"]):   # 사망 관련: 자살보도 권고기준
+    body = " ".join(text["headline"]) + text["caption"]
+    if SENSITIVE.search(body):   # 사망·범죄·자해 관련: 방법·도구·장소·자극적 묘사 제거 (메타 규정, 자살보도 권고기준)
         if BAN.search(" ".join(text["headline"])):
-            log("   제외(사망 보도 기준): 제목에 장소·방법·자극적 표현")
+            log("   제외(민감 주제 규정): 제목에 방법·장소·자극적 표현")
             return None
         paras = []
         for para in text["caption"].split("\n\n"):
             keep = " ".join(x for x in re.split(r"(?<=\.)\s+", para.strip()) if not BAN.search(x))
             if keep:
                 paras.append(keep)
+        if len(paras) < 2:
+            log("   제외(민감 주제 규정): 묘사 표현을 빼면 내용이 남지 않음")
+            return None
         text["caption"] = "\n\n".join(paras)
-        text["caption"] = text["caption"].rstrip() + "\n\n" + HELPLINE
+        if not CRIME.search(body):          # 범죄가 아닌 사망 소식에는 상담 전화 안내
+            text["caption"] = text["caption"].rstrip() + "\n\n" + HELPLINE
+        text["sensitive"] = True
     imgs = images.candidates(metas, collect.naver_images(issue["query"]), config.VARIANTS + 2, log)
     checked = []
     for img, credit in imgs:                     # 검증 ③: 사진이 기사 내용과 맞는지 (다른 인물·다른 행사 사진 제외)
@@ -239,7 +249,7 @@ def build_set(issue, set_id, pool=()):
         render.render(img, text["headline"], os.path.join(config.OUT_DIR, f), images.accent_color(img))
         variants.append({"file": f, "credit": credit})
     return {"id": set_id, "category": issue["category"], "topic": issue["topic"], "headline": text["headline"],
-            "caption": text["caption"], "cta": config.CTA, "variants": variants,
+            "caption": text["caption"], "cta": config.CTA, "variants": variants, "sensitive": bool(text.get("sensitive")),
             "sources": [a["link"] for a in arts[:3]],
             "verify": {"publishers": publishers, "fixed": fixed}}
 
@@ -271,6 +281,10 @@ def notify():
     log(f"{auto_min:g}분 대기 후 응답 없는 세트 자동 승인")
     time.sleep(auto_min * 60)
     for sid in sent:
+        f = os.path.join(config.OUT_DIR, sid + ".json")
+        if os.path.exists(f) and json.load(open(f, encoding="utf-8")).get("sensitive"):
+            log("자동 승인 제외(민감 주제)", sid)
+            continue
         r = telegram.auto_approve(sid)
         log("자동 승인 확인", sid, r.get("result") or r.get("error"))
 
