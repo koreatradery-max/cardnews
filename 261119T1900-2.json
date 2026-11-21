@@ -1,0 +1,53 @@
+{
+ "id": "261119T1900-2",
+ "category": "연예",
+ "topic": "뮤지컬 거장 앤드루 로이드 웨버가 SBS '뉴스헌터스'에 단독 출연해 '오페라의 유령' 40주년 비화와 AI에 대한 소신을 밝혔다.",
+ "headline": [
+  "뮤지컬 거장",
+  "앤드루 로이드 웨버",
+  "첫 내한과 소신"
+ ],
+ "caption": "뮤지컬 거장 앤드루 로이드 웨버가 첫 방한했습니다\n\n앤드루 로이드 웨버는 SBS 뉴스헌터스에 출연해 오페라의 유령 40주년 비화를 공개했습니다. 그는 오페라의 유령을 자신의 첫 로맨스 작품이라 설명하며 휘몰아치는 감정으로 작곡했다고 밝혔습니다.\n\n또한 AI에 대해 독창성은 인간의 몫이라는 소신을 전했습니다. AI는 데이터를 처리하는 기계일 뿐이라고 언급했습니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261119T1900-2_0.jpg",
+   "credit": "SBS 뉴스"
+  },
+  {
+   "file": "261119T1900-2_1.jpg",
+   "credit": "SBS 뉴스"
+  },
+  {
+   "file": "261119T1900-2_2.jpg",
+   "credit": "SBS 뉴스"
+  }
+ ],
+ "sources": [
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008854396&plink=RSSLINK&cooper=RSSREADER",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008853706&plink=RSSLINK&cooper=RSSREADER",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008853666&plink=RSSLINK&cooper=RSSREADER"
+ ],
+ "verify": {
+  "publishers": [
+   "JTBC",
+   "MBC 뉴스",
+   "SBS 뉴스",
+   "mnews.sbs.co.kr",
+   "경향신문",
+   "글로벌경제신문",
+   "뉴스핌",
+   "뉴시스",
+   "동아일보",
+   "매일경제",
+   "머니투데이",
+   "아시아경제",
+   "아이뉴스24",
+   "연합뉴스",
+   "파이낸셜뉴스",
+   "파이낸스투데이"
+  ],
+  "fixed": []
+ },
+ "label": "[2/2] 연예\n검증: 언론사 16곳 보도 확인 · AI 검수 통과"
+}

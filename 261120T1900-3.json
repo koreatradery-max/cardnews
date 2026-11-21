@@ -1,0 +1,39 @@
+{
+ "id": "261120T1900-3",
+ "category": "대형 이슈·속보",
+ "topic": "국제사법재판소(ICJ)가 미얀마의 로힝야족 집단학살에 대해 역사적인 판결을 내렸다.",
+ "headline": [
+  "역사적 판결",
+  "ICJ 미얀마",
+  "집단학살 인정"
+ ],
+ "caption": "국제사법재판소의 미얀마 집단학살 판결\n\n국제사법재판소는 미얀마가 2017년 무슬림 소수민족 로힝야족을 상대로 집단학살을 저질렀다고 판결했습니다.\n\n유엔 최고 사법기관인 국제사법재판소가 특정 국가에 집단학살 책임이 있다고 판결한 것은 80년 역사상 처음입니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261120T1900-3_0.jpg",
+   "credit": "연합뉴스"
+  },
+  {
+   "file": "261120T1900-3_1.jpg",
+   "credit": "연합뉴스"
+  },
+  {
+   "file": "261120T1900-3_2.jpg",
+   "credit": "SBS 뉴스"
+  }
+ ],
+ "sources": [
+  "https://www.yna.co.kr/view/AKR20261120165000084",
+  "https://www.yna.co.kr/view/AKR20261120131100009",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008856134&plink=RSSLINK&cooper=RSSREADER"
+ ],
+ "verify": {
+  "publishers": [
+   "SBS 뉴스",
+   "연합뉴스"
+  ],
+  "fixed": []
+ },
+ "label": "[3/3] 대형 이슈·속보\n검증: 언론사 2곳 보도 확인 · AI 검수 통과"
+}

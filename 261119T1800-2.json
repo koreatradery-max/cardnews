@@ -1,0 +1,40 @@
+{
+ "id": "261119T1800-2",
+ "category": "정치·사회",
+ "topic": "연락 두절 후 숨진 채 발견된 법학적성시험(LEET) 만점자 이진우 씨 사건에 대해 경찰이 계속 수사를 이어가겠다고 밝혔다.",
+ "headline": [
+  "리트 만점자 사망",
+  "경찰 수사 지속",
+  "실체적 진실 확인"
+ ],
+ "caption": "경찰 수사 지속 방침\n\n법학적성시험 만점자 이진우 씨가 19일 서울 강동구 한 숙박업소에서 심정지 상태로 발견됐습니다.\n\n경찰은 이 씨의 사망에도 불구하고 수사를 이어가며 실체적 진실을 확인하겠다고 밝혔습니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261119T1800-2_0.jpg",
+   "credit": "연합뉴스"
+  },
+  {
+   "file": "261119T1800-2_1.jpg",
+   "credit": "뉴시스"
+  },
+  {
+   "file": "261119T1800-2_2.jpg",
+   "credit": "SBS 뉴스"
+  }
+ ],
+ "sources": [
+  "https://www.yna.co.kr/view/AKR20261119161900004",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008854279&plink=RSSLINK&cooper=RSSREADER",
+  "https://www.newsis.com/view/NISX20261119_0003875683"
+ ],
+ "verify": {
+  "publishers": [
+   "SBS 뉴스",
+   "뉴시스",
+   "연합뉴스"
+  ],
+  "fixed": []
+ },
+ "label": "[2/3] 정치·사회\n검증: 언론사 3곳 보도 확인 · AI 검수 통과"
+}

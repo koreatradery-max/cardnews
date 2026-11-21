@@ -1,0 +1,47 @@
+{
+ "id": "261120T0257-1",
+ "category": "정치·사회",
+ "topic": "연락이 두절된 상태로 수색을 받던 법학적성시험(LEET) 첫 만점자 이진우 씨가 서울 강동구 모처에서 숨진 채 발견되어 경찰이 계속 수사를 이어가기로 했다.",
+ "headline": [
+  "리트 만점자",
+  "이진우 씨",
+  "숨진 채 발견"
+ ],
+ "caption": "리트 만점자 이진우 씨 숨져\n\n인공지능 활용 시험 부정행위 의혹을 받던 법학적성시험 만점자 이진우 씨가 서울 강동구 천호동의 한 모텔에서 숨진 채 발견됐습니다.\n\n이 씨는 수능 국어 영역 실시간 풀이로 공개 검증을 하겠다고 예고했으나 현장에 나타나지 않았습니다.\n\n경찰은 현장 감식 등을 거쳐 정확한 사망 경위를 조사할 예정입니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261120T0257-1_0.jpg",
+   "credit": "SBS 뉴스"
+  },
+  {
+   "file": "261120T0257-1_1.jpg",
+   "credit": "SBS 뉴스"
+  }
+ ],
+ "sources": [
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008854750&plink=RSSLINK&cooper=RSSREADER",
+  "https://www.newsis.com/view/NISX20261119_0003875919",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008854022&plink=RSSLINK&cooper=RSSREADER"
+ ],
+ "verify": {
+  "publishers": [
+   "Chosunbiz",
+   "SBS 뉴스",
+   "YTN",
+   "경기일보",
+   "경향신문",
+   "국제신문",
+   "뉴시스",
+   "연합뉴스",
+   "연합뉴스TV",
+   "전자신문",
+   "조선일보",
+   "주간경향",
+   "중앙일보",
+   "한겨레"
+  ],
+  "fixed": []
+ },
+ "label": "[요청 2] 정치·사회\n검증: 언론사 14곳 보도 확인 · AI 검수 통과"
+}
