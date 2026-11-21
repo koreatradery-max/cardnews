@@ -76,7 +76,8 @@ def generate():
         item["label"] = (f"[{i + 1}/{len(made)}] {item['category']}\n검증: 언론사 {len(v['publishers'])}곳 보도 확인 · AI 검수 통과"
                          + (f" (수정 {len(v['fixed'])}건)" if v["fixed"] else "")
                          + ("\n⚠️ 민감 주제: 묘사 표현 자동 제거됨, 자동 승인 제외" if item.get("sensitive") else "")
-                         + (f"\n⏱ {config.auto_minutes(now.hour):g}분 안에 응답이 없으면 자동 승인됩니다" if config.auto_minutes(now.hour) else ""))
+                         + ("\n🤖 승인 없이 자동 업로드됩니다" if config.AUTO_ALL else
+                            (f"\n⏱ {config.auto_minutes(now.hour):g}분 안에 응답이 없으면 자동 승인됩니다" if config.auto_minutes(now.hour) else "")))
         json.dump(item, open(os.path.join(config.OUT_DIR, item["id"] + ".json"), "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
     json.dump({"at": now.isoformat(), "ids": [m["id"] for m in made], "auto_min": config.auto_minutes(now.hour)},

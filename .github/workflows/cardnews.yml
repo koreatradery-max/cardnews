@@ -1,12 +1,17 @@
 name: 카드뉴스 자동화
 
 on:
-  # 정시 실행은 Cloudflare Worker(tg-login)가 한국 시간 8~22시 매 정각 workflow_dispatch 로 호출한다.
-  # (GitHub 자체 예약은 늦거나 건너뛰는 일이 잦아 쓰지 않음)
-  workflow_dispatch:           # Worker 호출 + Actions 화면에서 수동 실행
+  # 30분마다 실행 (한국 시간 03:00~05:00 제외 → 02:30 마지막, 05:30 첫 회차)
+  # 한국 시간 = UTC+9 → UTC 18·19시(=한국 3·4시)와 UTC 20:00(=한국 5:00)을 뺀다
+  schedule:
+    - cron: '0,30 0-17,21-23 * * *'
+    - cron: '30 20 * * *'
+  # Cloudflare Worker(tg-login)도 한국 시간 8~22시 정각마다 workflow_dispatch 로 호출한다 (GitHub 예약이 늦을 때 보완)
+  workflow_dispatch:
 
 permissions:
   contents: write
+  actions: read
 
 concurrency:
   group: cardnews
@@ -23,12 +28,24 @@ jobs:
       CARDNEWS_KEY: ${{ secrets.CARDNEWS_KEY }}
       CARDNEWS_WORKER_URL: ${{ vars.CARDNEWS_WORKER_URL || 'https://tg-login.korea-trader-y.workers.dev' }}
       CARDNEWS_MODEL: ${{ vars.CARDNEWS_MODEL }}
-      CARDNEWS_AUTO_MIN: ${{ vars.CARDNEWS_AUTO_MIN || '10' }}
-      CARDNEWS_AUTO_WINDOW: ${{ vars.CARDNEWS_AUTO_WINDOW || '8-12' }}   # 이 시간대(한국 시간)에 만든 세트만 자동 승인
+      CARDNEWS_AUTO_ALL: '1'          # 모든 회차 승인 없이 바로 업로드 (민감 주제만 승인 대기)
+      CARDNEWS_SETS: '1'              # 30분마다 1세트 (인스타그램 API 게시 한도: 24시간 50건)
       TZ: Asia/Seoul
     steps:
+      - name: 중복 실행 방지 (예약 실행과 Worker 호출이 겹치면 한 번만)
+        id: dup
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          since=$(date -u -d '-12 minutes' +%Y-%m-%dT%H:%M:%SZ)
+          n=$(gh api -X GET "repos/${GITHUB_REPOSITORY}/actions/workflows/cardnews.yml/runs" -f created=">${since}" -F per_page=20 \
+                -q "[.workflow_runs[] | select(.id < ${GITHUB_RUN_ID} and .conclusion != \"cancelled\" and .conclusion != \"skipped\")] | length" || echo 0)
+          echo "최근 12분 안의 다른 실행: $n"
+          if [ "$n" = "0" ]; then echo "go=1" >> "$GITHUB_OUTPUT"; else echo "::notice::직전 회차와 겹쳐 건너뜁니다."; fi
+
       - name: 키 확인 (아직 등록 전이면 조용히 종료)
         id: keys
+        if: steps.dup.outputs.go == '1'
         run: |
           if [ -n "$GEMINI_API_KEY" ] && [ -n "$CARDNEWS_KEY" ]; then
             echo "ready=1" >> "$GITHUB_OUTPUT"
@@ -76,6 +93,6 @@ jobs:
           git push -q -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" media
           sleep 10
 
-      - name: 텔레그램 승인 요청 (8~12시 회차는 10분 무응답 시 자동 승인)
+      - name: 텔레그램 전송 + 바로 인스타그램 자동 업로드
         if: steps.keys.outputs.ready == '1'
         run: python run.py notify

@@ -26,8 +26,13 @@ AUTO_APPROVE_MIN = float(os.environ.get("CARDNEWS_AUTO_MIN", "10"))  # 자동 �
 AUTO_WINDOW = os.environ.get("CARDNEWS_AUTO_WINDOW", "8-12")           # 자동 승인 시간대(한국 시간, 시작-끝 포함). 비우면 자동 승인 없음
 
 
+AUTO_ALL = os.environ.get("CARDNEWS_AUTO_ALL", "") == "1"   # 1 이면 모든 회차를 승인 없이 바로 업로드
+
+
 def auto_minutes(hour):
     """그 시각(한국 시간)에 만든 세트의 자동 승인 대기 시간(분). 0 이면 자동 승인 안 함."""
+    if AUTO_ALL:
+        return 0.05                                   # 텔레그램 전송 직후 바로 업로드
     try:
         a, b = (int(x) for x in AUTO_WINDOW.split("-"))
     except ValueError:
