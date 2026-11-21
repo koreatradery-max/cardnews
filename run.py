@@ -310,7 +310,12 @@ def admin(folder, mode):
         return
     ids = sorted({m.group(1) for n in os.listdir(folder) if (m := re.match(r"(\d{6}T\d{4}-\d+)\.json$", n))})
     log(f"세트 {len(ids)}개")
-    status = lambda: {x["id"]: x for x in telegram.worker("/cardnews/status", {"ids": ids}).get("items", [])}
+    def status():
+        out = {}
+        for k in range(0, len(ids), 40):              # Worker 는 한 번에 40개까지만 조회
+            for x in telegram.worker("/cardnews/status", {"ids": ids[k:k + 40]}).get("items", []):
+                out[x["id"]] = x
+        return out
     st = status()
     for i in ids:
         x = st.get(i, {})
