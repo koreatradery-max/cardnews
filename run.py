@@ -142,6 +142,8 @@ def request(path):
                  "topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
                  "articles": collect.related(words, [], cands)[:3]}
         issue["facts"] = req.get("facts", [])
+        if req.get("text"):
+            issue["text"] = req["text"]
         if req.get("urls"):              # 직접 지정한 기사 주소 (RSS 에 아직 안 올라온 속보용)
             issue["articles"] = [{"category": issue["category"], "title": t, "source": src, "link": u, "desc": ""}
                                  for u, t, src in req["urls"]] + issue["articles"]
@@ -209,14 +211,18 @@ def build_set(issue, set_id, pool=()):
     material = write.material_text(arts, [m["text"] for m in metas[:3]], [f"{t} ({src})" for t, src in cross])
     if issue.get("facts"):          # 운영자가 직접 확인해 넣은 사실 (요청 제작 때만)
         material += "\n\n[운영자 직접 확인 사실 — 기사와 같은 수준의 확인된 자료로 취급]\n" + "\n".join("- " + f for f in issue["facts"])
-    draft = write.write_set(issue, material)
-    if not draft:
-        log("   자료 부족으로 건너뜀")
-        return None
-    # 검증 ②: AI 검수 2회 + 숫자 자동 대조
-    text, fixed = write.double_check(draft, material, log)
-    if not text:
-        return None
+    if issue.get("text"):           # 직접 작성한 문구 (Gemini 한도 초과 등으로 AI 작성이 안 될 때)
+        text, fixed = {"headline": issue["text"]["headline"], "caption": issue["text"]["caption"]}, []
+        log("   직접 작성 문구 사용")
+    else:
+        draft = write.write_set(issue, material)
+        if not draft:
+            log("   자료 부족으로 건너뜀")
+            return None
+        # 검증 ②: AI 검수 2회 + 숫자 자동 대조
+        text, fixed = write.double_check(draft, material, log)
+        if not text:
+            return None
     body = " ".join(text["headline"]) + text["caption"]
     if SENSITIVE.search(body):   # 사망·범죄·자해 관련: 방법·도구·장소·자극적 묘사 제거 (메타 규정, 자살보도 권고기준)
         if BAN.search(" ".join(text["headline"])):
