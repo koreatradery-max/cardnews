@@ -142,6 +142,9 @@ def request(path):
                  "topic": req["topic"], "query": req["query"], "category": req.get("category", "대형 이슈·속보"),
                  "articles": collect.related(words, [], cands)[:3]}
         issue["facts"] = req.get("facts", [])
+        if req.get("urls"):              # 직접 지정한 기사 주소 (RSS 에 아직 안 올라온 속보용)
+            issue["articles"] = [{"category": issue["category"], "title": t, "source": src, "link": u, "desc": ""}
+                                 for u, t, src in req["urls"]] + issue["articles"]
         log(f"요청 주제: {issue['topic']} / 관련 기사 {len(issue['articles'])}건")
         try:
             item = build_set(issue, f"{now:%y%m%dT%H%M}-{n}", cands)
