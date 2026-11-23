@@ -171,7 +171,8 @@ def request(path):
             made_in[req["_group"]] = made_in.get(req["_group"], 0) + 1
         history.append({"at": now.isoformat(), "topic": issue["topic"], "query": issue["query"], "id": item["id"]})
     save_history(history)
-    json.dump({"at": now.isoformat(), "ids": ids, "auto_min": 0},
+    post_after = max([float(r.get("post_after", 0)) for r in json.load(open(path, encoding="utf-8"))] if isinstance(json.load(open(path, encoding="utf-8")), list) else [float(json.load(open(path, encoding="utf-8")).get("post_after", 0))])
+    json.dump({"at": now.isoformat(), "ids": ids, "auto_min": post_after},   # post_after 분 뒤 자동 업로드 (0 이면 승인 대기)
               open(os.path.join(config.OUT_DIR, "pending.json"), "w", encoding="utf-8"))
 
 
