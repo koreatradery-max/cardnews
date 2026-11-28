@@ -1,0 +1,56 @@
+{
+ "id": "261126T0800-1",
+ "category": "대형 이슈·속보",
+ "topic": "김정은 북한 국무위원장이 핵시설을 현지지도하며 전술핵의 다영역 활용화와 임무 수행을 강조했다.",
+ "headline": [
+  "김정은 핵시설 시찰",
+  "전술핵 다영역 활용화",
+  "적국과 국경 마주해"
+ ],
+ "caption": "김정은 핵시설 현지지도\n\n김정은 북한 국무위원장이 핵물질 생산기지와 핵무기 연구소 등을 방문해 생산 실태를 점검했습니다.\n\n김 위원장은 전술핵무기를 다양한 영역에서 활용하는 것이 절실한 과제라고 강조했습니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261126T0800-1_0.jpg",
+   "credit": "연합뉴스"
+  },
+  {
+   "file": "261126T0800-1_1.jpg",
+   "credit": "SBS 뉴스"
+  },
+  {
+   "file": "261126T0800-1_2.jpg",
+   "credit": "SBS 뉴스"
+  }
+ ],
+ "sensitive": false,
+ "sources": [
+  "https://www.yna.co.kr/view/AKR20261126011651504",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008863980&plink=RSSLINK&cooper=RSSREADER",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008863968&plink=RSSLINK&cooper=RSSREADER"
+ ],
+ "verify": {
+  "publishers": [
+   "KBC광주방송",
+   "MBC 뉴스",
+   "SBS 뉴스",
+   "news.sbs.co.kr",
+   "경기일보",
+   "뉴스토마토",
+   "뉴시스",
+   "동아일보",
+   "매일경제",
+   "연합뉴스",
+   "연합뉴스 한민족센터",
+   "연합뉴스TV",
+   "조선일보",
+   "중앙일보",
+   "천지일보",
+   "타임뉴스",
+   "파이낸셜뉴스",
+   "한겨레"
+  ],
+  "fixed": []
+ },
+ "label": "[1/1] 대형 이슈·속보\n검증: 언론사 18곳 보도 확인 · AI 검수 통과\n🤖 승인 없이 자동 업로드됩니다"
+}

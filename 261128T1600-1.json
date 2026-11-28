@@ -1,0 +1,42 @@
+{
+ "id": "261128T1600-1",
+ "category": "정치·사회",
+ "topic": "이해욱 DL그룹 회장이 실적 부진을 이유로 금요일 밤에 직원 수백명을 긴급 호출해 갑질 논란이 일었다",
+ "headline": [
+  "금요일 밤에",
+  "직원 수백명을",
+  "긴급 호출해 논란"
+ ],
+ "caption": "금요일 밤에 직원 수백명을 긴급 호출해 논란\n\n이해욱 DL그룹 회장이 실적 부진 문제를 지적하다 밤 10시께 계열사 플랜트 설계실 직원 수백명을 회사로 호출했습니다.\n\n일부는 야근 중이었으나 이미 귀가했던 직원들도 호출을 받고 다시 나와 새벽에 귀가한 것으로 전해졌습니다.\n\nDL그룹은 프로젝트 설계상 문제점에 긴급 대응하기 위한 취지였다고 설명했습니다.",
+ "cta": "팔로우하고 매일 이슈 받아보세요",
+ "variants": [
+  {
+   "file": "261128T1600-1_0.jpg",
+   "credit": "연합뉴스"
+  },
+  {
+   "file": "261128T1600-1_1.jpg",
+   "credit": "SBS 뉴스"
+  },
+  {
+   "file": "261128T1600-1_2.jpg",
+   "credit": "경향신문"
+  }
+ ],
+ "sensitive": false,
+ "sources": [
+  "https://www.yna.co.kr/view/AKR20261128027951003",
+  "https://news.sbs.co.kr/news/endPage.do?news_id=N1008867829&plink=RSSLINK&cooper=RSSREADER",
+  "https://www.hani.co.kr/arti/society/society_general/1289532.html"
+ ],
+ "verify": {
+  "publishers": [
+   "SBS 뉴스",
+   "경향신문",
+   "연합뉴스",
+   "한겨레"
+  ],
+  "fixed": []
+ },
+ "label": "[1/1] 정치·사회\n검증: 언론사 4곳 보도 확인 · AI 검수 통과\n🤖 승인 없이 자동 업로드됩니다"
+}
